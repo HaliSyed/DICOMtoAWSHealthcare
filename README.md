@@ -126,20 +126,28 @@ To run it on your own (synthetic or public) DICOM folder, use
 ### Run the tests
 
 ```bash
-pytest
+pytest            # 39 tests, about 10 seconds, fully offline
 ```
 
-The suite includes the sample files in `tests/data/dicom/` (JPEG-compressed multi-frame
-angiography and RLE colour ultrasound). Other DICOM files you place in `data/` are
-git-ignored, so they are never published; when present, the test suite fully decodes them too.
+| Test file | Tests | What it covers |
+|---|---|---|
+| `tests/test_pseudonym.py` | 4 | Keyed tokens, week-based date shifts, UID remapping, age bands |
+| `tests/test_dicom_deid.py` | 10 | Every de-identification rule, the independent verifier, burned-in risk, real vendor files from pydicom (one has 179 private tags) |
+| `tests/test_pipeline.py` | 5 | End-to-end ingest, **byte-level leak scan** of outputs and database, idempotent re-run, corrupt files, foreign keys |
+| `tests/test_scripts.py` | 5 | Workshop Demo 1 (CSV) and Demo 2 (letters), reproducibility |
+| `tests/test_loader.py` | 13 | Reading DICOM: summaries without PHI values, JPEG/RLE/palette-colour decoding, multi-frame, PNG export, **every frame of the sample files** |
+| `tests/test_samples.py` | 2 | The sample files in `tests/data/dicom/` through the whole pipeline, with a leak check |
 
-The suite covers the pseudonymisation primitives, every de-identification rule,
-an end-to-end ingest, a **leak scan** (every PHI string from the raw files is
-searched for in every output file and in the raw database bytes), idempotent
-re-ingest, corrupt-file handling, real vendor DICOM files bundled with pydicom
-(including one with 179 private tags and JPEG 2000 compressed data), and the
-workshop scripts. After an ingest, `python scripts/leak_scan.py` runs the same
-leak check against your local `data/` output.
+**Test data used:** synthetic DICOM generated on the fly, pydicom's bundled vendor
+files, and the five public Rubo Medical samples in `tests/data/dicom/`
+(JPEG-compressed multi-frame angiography and RLE colour ultrasound).
+
+To test with **more public DICOM files**, download them into `data/incoming/`.
+That folder is git-ignored, so nothing in it is ever published. Every DICOM file
+found there is also fully decoded by the test suite. See
+[Getting DICOM test data](#getting-dicom-test-data-public-sources) for sources and
+the vetting steps. After any ingest, `python scripts/leak_scan.py` runs an
+independent leak check against the output.
 
 Full results, the defects found and fixed, and what is **not** yet tested are in
 **[TESTING.md](TESTING.md)**.

@@ -1,11 +1,12 @@
 # Testing Report: Phase 0
 
 **Date:** 2026-09-30
-**Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters)
+**Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
 **Result:** ✅ **39 / 39 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
-All data used in testing is synthetic (Faker, fixed seeds) or comes from the
-public sample files that ship with pydicom. No real patient data was used.
+All data used in testing is synthetic (Faker, fixed seeds) or comes from public
+sources: the sample files that ship with pydicom, and the five Rubo Medical demo
+files in `tests/data/dicom/`. No real patient data was used.
 
 ---
 
@@ -100,7 +101,29 @@ dicom-deid synth
 dicom-deid ingest
 dicom-deid report
 python scripts/leak_scan.py
+
+# Read the committed sample files (no identifying values are printed)
+dicom-deid inspect tests/data/dicom
 ```
+
+### 2.1 Testing with additional public DICOM files
+
+DICOM test data must come from **public repositories** (sources are listed in the
+[README](README.md#getting-dicom-test-data-public-sources)). Never use hospital or
+patient exports.
+
+```bash
+# 1. download into data/incoming/ (git-ignored as a whole folder, including extension-less DICOM files)
+# 2. vet the files
+dicom-deid inspect data/incoming
+dicom-deid ingest --src data/incoming
+python scripts/leak_scan.py --raw data/incoming     # must report 0 leaks
+# 3. the test suite decodes every frame of each DICOM file found there
+pytest
+```
+
+A file only moves into `tests/data/dicom/` (published) when it is small, public
+and redistributable, and its source is recorded in section 4.4.
 
 ---
 
@@ -312,6 +335,9 @@ git-ignored (`*.dcm` / `*.DCM`).
 | 10 | The verifier only matched short identifiers (< 5 chars) as a whole value, so "Doe" in "Reviewed with Jane Doe" was missed. This matters for common short names such as *Ali*, *Khan*, *Syed* and *Lee*. | Test 9 **failed** | Short identifiers now match as whole words anywhere in a value (fails safe) |
 | 11 | The street-address regex missed military addresses (`PSC 5116, Box 3726, APO AP 44084`) | Manual review of letter output (referral_008) | Line-level rule: any line ending in `ST 12345` |
 | 12 | The quarantine reason said "modality NM" when the actual trigger was the Secondary Capture SOP class | Vendor-file run (4.3) | The message now names the real trigger |
+| 13 | PNG previews of the ultrasound sample (`0020.DCM`, PALETTE COLOR) would have been palette indices rather than colours | Manual decode of the sample files before writing the tests | `to_uint8` expands palette colour through the file's colour table; the preview is RGB |
+| 14 | The documented vetting commands pointed the leak scan at `data/`, which also holds the pipeline's own output (false leaks). DICOM files without an extension, which are common, were not covered by the `*.dcm` ignore rule. | Review of the new README instructions | Downloads go to `data/incoming/`, which is git-ignored as a whole folder; the commands use it explicitly |
+| 15 | *(test bug, not a code bug)* `test_samples_ingest` expected 4 XA series, but two sample files share one series | The test **failed** on first run | Expectation corrected to 3 XA + 1 US series, matching the earlier manual run (4 patients, 4 series) |
 
 ---
 
@@ -325,3 +351,5 @@ git-ignored (`*.dcm` / `*.DCM`).
 | **Real clinical DICOM / HL7** | Out of scope for this public repo | Phase 1, controlled environment only |
 | **Performance at scale** | Largest run was 28 files | Load test in Phase 1 (thousands of studies) |
 | **Linux / macOS** | Only run on Windows | CI (GitHub Actions) matrix in Phase 1 |
+| **JPEG Extended / JPEG Lossless / JPEG-LS decoding** | No decoder plugin installed; such files are reported as *not decodable* (test 29) rather than failing | Add `pylibjpeg` plugins in Phase 1 |
+| **Path B (AWS-managed)** | No AWS account was used; the guide is documentation only | Infrastructure code next, then deployment tests in a sandbox account with synthetic data |
