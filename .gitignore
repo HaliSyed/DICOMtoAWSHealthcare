@@ -13,6 +13,14 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# DICOM files are never committed, wherever they are placed: files added by
+# hand may contain real patient data. Test DICOM is generated (dicom-deid
+# synth) or comes from pydicom's bundled samples.
+*.dcm
+*.DCM
+*.dicom
+DICOMDIR
+
 # Generated local data (synthetic DICOM, local DB, de-identified output)
 data/dicom/
 data/db/

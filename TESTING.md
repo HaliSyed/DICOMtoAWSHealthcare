@@ -228,7 +228,30 @@ Nine public sample files were ingested together:
 
 ✅ 0 failures, and every quarantine decision was correct.
 
-### 4.4 Workshop scripts
+### 4.4 Externally supplied DICOM files (not committed)
+
+The repo owner supplied five DICOM files for testing. They carry patient
+identity fields and have no de-identification markers, so they were
+**treated as potentially real data**:
+
+- processed in a temporary folder outside the repo, then deleted
+- never committed; `.gitignore` now excludes `*.dcm` / `*.DCM` everywhere
+- only counts and outcomes were recorded, never names, IDs or dates
+
+| File | Modality | Compression | Frames | Outcome | Private tags removed |
+|---|---|---|---|---|---|
+| `0002.DCM` | XA (angiography) | JPEG Baseline | 96 | QUARANTINED | 14 |
+| `0003.DCM` | XA | JPEG Baseline | 17 | QUARANTINED | 14 |
+| `0004.DCM` | XA | JPEG Baseline | 17 | QUARANTINED | 14 |
+| `0009.DCM` | XA | JPEG Baseline | 137 | QUARANTINED | 13 |
+| `0020.DCM` | US multi-frame | RLE Lossless | 11 | QUARANTINED | 0 |
+
+- ✅ **All five quarantined, which is correct.** `BurnedInAnnotation` is missing, and XA and US images very often have identifying text burned into the pixels. They need OCR review (Phase 1) before release.
+- ✅ Header de-identification completed on every file: identity removed, private tags gone, every person name emptied, dates shifted, UIDs remapped. Multi-frame pixel data stayed intact in both compressed formats.
+- ✅ Linkage: the 5 files resolved to **4 patients** (two files share one token).
+- ✅ Leak scan: **25** identity values collected from the originals, **0** found in the output files or the database.
+
+### 4.5 Workshop scripts
 
 | Check | Result |
 |---|---|
@@ -237,12 +260,12 @@ Nine public sample files were ingested together:
 | `generate_referral_letters.py` + `deidentify_referral_letters.py` | ✅ All 10 letters: every address, phone, date, DOB, patient name and physician redacted. Only clinic names remain (by design). |
 | `deidentify_with_comprehend_medical.py --help` | ✅ Parses. The real AWS call was **not** executed (no credentials, and synthetic-only policy). |
 
-### 4.5 Repository hygiene before push
+### 4.6 Repository hygiene before push
 
 | Check | Result |
 |---|---|
 | `.env` (holds the GitHub token) is git-ignored | ✅ Confirmed with `git check-ignore` |
-| `venv/`, `data/dicom/`, `data/db/`, `*.zip` not staged | ✅ 0 matches in the staged file list |
+| `venv/`, `data/dicom/`, `data/db/`, `*.zip`, `*.dcm` not staged | ✅ 0 matches in the staged file list |
 | Staged content scanned for the token pattern `github_pat_` | ✅ 0 matches (checked again immediately before push) |
 
 ---
