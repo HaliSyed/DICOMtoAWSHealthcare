@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-30
 **Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Path A CSV, Path B letters)
-**Result:** ✅ **24 / 24 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **37 / 37 automated tests passed** (32 in a fresh clone; 5 more run where the hand-placed DICOM files in `data/` exist). Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from the
 public sample files that ship with pydicom. No real patient data was used.
@@ -30,6 +30,8 @@ These are declared under `dependencies` in `pyproject.toml`, so every install ge
 |---|---|---|---|---|
 | **pydicom** | 3.0.2 | The standard Python library for reading, editing and writing DICOM files | **The core of the pipeline.** It reads DICOM files (any transfer syntax, including compressed, without decoding pixels) and walks every element, including nested sequences. It edits, removes and empties tags, removes private tags, writes the de-identified file with correct file meta, and exports the header as DICOM JSON. Its bundled sample files (`pydicom.data`) are also the real-vendor test set. | `dicom_deid.py`, `verify.py`, `reader.py`, `pipeline.py`, `synthetic.py`, `leak_scan.py`, tests |
 | **SQLAlchemy** | 2.1.1 | A database toolkit and ORM (object-relational mapper) for Python | Defines the tables as Python classes and runs all inserts and queries. It also creates the schema and turns on SQLite foreign keys. **Its main job is database portability:** the same code runs on SQLite now and PostgreSQL in Phase 1 by changing only `DATABASE_URL`, and the JSON column becomes JSONB on PostgreSQL automatically. | `db.py`, `pipeline.py`, tests |
+| **numpy** | 2.4.6 | The standard array library for numerical Python | Holds decoded image frames as arrays. pydicom needs it to decode pixel data, and the loader uses it for display scaling (8-bit conversion, windowing). | `loader.py`, tests |
+| **Pillow** | 12.3.0 | The standard Python imaging library | pydicom's decoder for **JPEG Baseline** and **JPEG 2000** pixel data (the supplied angiography files are JPEG Baseline), and the PNG writer for `export_png` / `dicom-deid inspect --export-png`. | `loader.py` (via pydicom), tests |
 | **Faker** | 40.40.0 | A generator of realistic fake data (names, addresses, phone numbers, dates) | Produces **all synthetic PHI** used in tests: patient and physician names, addresses and phone numbers. It runs with fixed seeds, so outputs are repeatable. This lets the project test de-identification without any real patient data. Note that name lists can change between Faker versions. | `synthetic.py`, `generate_synthetic_data.py`, `generate_referral_letters.py` |
 
 ### 1.3 Optional libraries (installed as extras)
@@ -69,21 +71,16 @@ ones are listed first.
 | `os`, `warnings`, `sys` | Reading environment variables; warning when the development secret is in use; script exit codes |
 | `subprocess` | Tests run the workshop scripts exactly as a user would, as separate processes |
 
-### 1.6 Installed but not used
-
-| Library | Why it is present |
-|---|---|
-| **numpy** 2.4.6 | It was installed in the test environment, but **no project code imports it** and it is not a dependency. pydicom only needs numpy to decode pixel data into arrays, which Phase 0 never does. It will become a real dependency in Phase 1 for OCR and pixel masking. |
-
-### 1.7 Planned for later phases (not in the code yet)
+### 1.6 Planned for later phases (not in the code yet)
 
 | Library / tool | Phase | Purpose |
 |---|---|---|
 | **PostgreSQL 16** + psycopg | 1 | Production database: concurrency, roles, row-level security, encryption, backups |
+| **pylibjpeg** (+ plugins) | 1 | Decode JPEG Extended / Lossless / JPEG-LS, which Pillow cannot (currently reported as not decodable) |
 | **Alembic** | 1 | Database schema migrations (replaces `create_all`) |
 | **pynetdicom** | 1 | Receive images directly from PACS/modalities over the DICOM network protocol (C-STORE SCP) |
 | **hl7apy** or **python-hl7** | 1 | Parse HL7 v2 messages (ADT, ORM/OMI, ORU) so they can be de-identified and linked to DICOM studies |
-| **numpy** + OCR (Amazon Textract / Rekognition, or Tesseract via `pytesseract` for on-premises data) | 1 | Find and mask burned-in text in quarantined ultrasound and screenshot images |
+| OCR (Amazon Textract / Rekognition, or Tesseract via `pytesseract` for on-premises data) on frames from `loader.iter_frames` | 1 | Find and mask burned-in text in quarantined ultrasound and screenshot images |
 | Defacing tool (e.g. `pydeface`) | 1 | Remove facial features from head CT/MR volumes |
 | **GitHub Actions** | 1 | Continuous integration: run the tests on Linux, macOS and Windows for every push |
 | **fhir.resources** | 2 | Python FHIR R4 models for building and validating `Patient`, `ImagingStudy`, `DiagnosticReport`, etc. |
@@ -110,8 +107,10 @@ python scripts/leak_scan.py
 ## 3. Automated tests (pytest)
 
 ```text
-24 passed, 1 warning in 4.22s
+37 passed, 1 warning
 ```
+
+In a fresh clone the 5 tests over hand-placed DICOM files are skipped (the files are git-ignored), giving 32 passed and 5 skipped.
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
 
@@ -158,6 +157,18 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 22 | `test_redact_free_text` | `"Stephanie Miller - 2024-07-17"` → `"[REDACTED] - [REDACTED-DATE]"`, and `"PT: Walker"` → `"[REDACTED]"` | ✅ PASS |
 | 23 | `test_referral_letter_redaction` | Patient name, DOB, physician (including the repeat in the signature), phone, letter date and military APO address are all removed. The clinic name is kept by design. | ✅ PASS |
 | 24 | `test_referral_letters_script` | The script processes all 10 letters, and no patient name survives | ✅ PASS |
+
+### 3.5 Reading DICOM files: `tests/test_loader.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 25 | `test_read_info_synthetic` | The summary lists which identifying attributes are present, counts private tags, and never includes an identifying value | ✅ PASS |
+| 26–28 | `test_compressed_frames_decode[…]` | JPEG Baseline colour, RLE monochrome and RLE colour pydicom samples decode to the right shape | ✅ PASS |
+| 29 | `test_undecodable_is_reported_not_raised` | A JPEG Extended file (no decoder installed) is reported as not decodable, with the reason, instead of crashing | ✅ PASS |
+| 30 | `test_multiframe_selection_and_uint8` | A 4-frame file yields 4 frames, frame selection returns the right frames, and the 8-bit conversion spans 0–255 | ✅ PASS |
+| 31 | `test_export_png` | PNG export respects `every_nth` and `max_frames` and writes greyscale images | ✅ PASS |
+| 32 | `test_cli_inspect` | `dicom-deid inspect` output shows no patient name or ID | ✅ PASS |
+| 33–37 | `test_local_dicom_files_fully_decode[…]` | Every frame of each hand-placed file in `data/` decodes with the header's dimensions and frame count (runs only where the files exist) | ✅ PASS (all 5 supplied files) |
 
 ---
 
@@ -250,6 +261,7 @@ identity fields and have no de-identification markers, so they were
 - ✅ Header de-identification completed on every file: identity removed, private tags gone, every person name emptied, dates shifted, UIDs remapped. Multi-frame pixel data stayed intact in both compressed formats.
 - ✅ Linkage: the 5 files resolved to **4 patients** (two files share one token).
 - ✅ Leak scan: **25** identity values collected from the originals, **0** found in the output files or the database.
+- ✅ **Pixel decoding** (`dicom-deid inspect`, `loader.iter_frames`): all **278 frames** decode. That is 96 + 17 + 17 + 137 frames of 512×512 8-bit JPEG Baseline angiography, and 11 frames of 430×600 RLE palette-colour ultrasound, which is expanded to RGB for PNG preview.
 
 ### 4.5 Workshop scripts
 

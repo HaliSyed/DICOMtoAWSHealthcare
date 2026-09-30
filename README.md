@@ -37,7 +37,7 @@ it decides whether a healthcare AI pilot gets past a regulator.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **0** | Synthetic DICOM → extract → de-identify → verify → local DB | ✅ **Done**, 24 automated tests passing ([TESTING.md](TESTING.md)) |
+| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 37 automated tests passing ([TESTING.md](TESTING.md)) |
 | **1** | Real DICOM images + HL7 v2 messages; PostgreSQL; production hardening | 🔜 Next |
 | **2** | FHIR R4 layer (ImagingStudy, Patient, DiagnosticReport…), with PDPL-aligned controls | 📐 Designed, see roadmap |
 | **3** | AWS pipeline: S3 → HealthImaging → inference → report generation | 📐 Planned |
@@ -69,6 +69,31 @@ dicom-deid ingest    # 2. de-identify, verify, store                    -> data/
 dicom-deid report    # 3. summarise what is in the database
 ```
 
+### Read any DICOM file
+
+```bash
+dicom-deid inspect path/to/files               # summary table: modality, compression, frames, decodable, burned-in risk
+dicom-deid inspect file.dcm --json             # full details
+dicom-deid inspect file.dcm --export-png data/dicom/preview --every 10   # frames as PNG
+```
+
+`inspect` never prints identifying values. It only reports *how many*
+identifying attributes a file carries. PNG previews contain the raw pixels, so
+any burned-in patient text survives: keep them under the git-ignored
+`data/dicom/` folder. In code:
+
+```python
+from dicom_deid.loader import read_info, iter_frames, load_frames, export_png
+
+info = read_info("data/0002.DCM")            # DicomFileInfo: frames, transfer syntax, decodable, ...
+for frame in iter_frames("data/0002.DCM"):   # one numpy array per frame, memory-flat for long cine loops
+    ...
+```
+
+Decoding covers uncompressed, RLE Lossless, JPEG Baseline and JPEG 2000 files, including multi-frame
+angiography, cine ultrasound and palette-colour images. JPEG Extended, JPEG Lossless and JPEG-LS need an
+extra plugin (`pylibjpeg`); `read_info` reports those files as not decodable instead of failing.
+
 `python -m dicom_deid <command>` works as well. Example output:
 
 ```text
@@ -88,6 +113,9 @@ To run it on your own (synthetic or public) DICOM folder, use
 ```bash
 pytest
 ```
+
+DICOM files you place in `data/` (for example `data/0002.DCM`) are git-ignored, so
+they are never published. When present, the test suite fully decodes each of them.
 
 The suite covers the pseudonymisation primitives, every de-identification rule,
 an end-to-end ingest, a **leak scan** (every PHI string from the raw files is
@@ -296,13 +324,14 @@ Design choices worth pointing out live:
 ### Phase 0: Local DICOM de-identification (✅ current)
 
 - [x] Read DICOM files (any transfer syntax, including compressed; no pixel decoding needed)
+- [x] `loader` module + `dicom-deid inspect`: PHI-free file summaries, frame decoding (JPEG Baseline, JPEG 2000, RLE, palette colour, multi-frame), PNG export
 - [x] Extract study/series/instance metadata, plus the full header as DICOM JSON
 - [x] De-identify: PS3.15 Basic Profile subset, keyed tokens, UID remapping, per-patient week-based date shifts, age bands
 - [x] Independent residual-PHI verifier; quarantine for burned-in-text risk
 - [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Path A (CSV) and Path B (letters) scripts, now reproducible
-- [x] 24 automated tests, including a byte-level leak scan and real vendor files
+- [x] 37 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
 
 ### Phase 1: Real data: DICOM images + HL7 messages
 
@@ -419,12 +448,13 @@ DICOMtoAWSHealthcare/
 ├── requirements.txt            pip install -r requirements.txt
 ├── .env.example                configuration template (.env itself is git-ignored)
 ├── src/dicom_deid/
-│   ├── cli.py                  dicom-deid synth | ingest | report
+│   ├── cli.py                  dicom-deid synth | ingest | report | inspect
 │   ├── config.py               DEID_SECRET, DATABASE_URL
 │   ├── pseudonym.py            HMAC tokens, UID remap, date shift, age bands
 │   ├── dicom_deid.py           DICOM de-identification rules
 │   ├── verify.py               independent residual-PHI scan
 │   ├── reader.py               file discovery, metadata extraction, DICOM JSON
+│   ├── loader.py               read any DICOM: PHI-free summary, frame decoding, PNG export
 │   ├── db.py                   SQLAlchemy models (SQLite / PostgreSQL)
 │   ├── pipeline.py             ingest orchestration, quarantine, audit, report
 │   ├── synthetic.py            synthetic "dirty" DICOM generator
