@@ -14,23 +14,26 @@ What this script does to each record:
     3. patient_birth_date     -> DROPPED, replaced with a 10-year age_band
     4. referring_physician    -> DROPPED
     5. burned_in_annotation   -> scanned for leftover names/dates, redacted
-    6. study_date             -> date-shifted per patient (keeps day-of-week
-                                  patterns useful for research, breaks the
+    6. study_date             -> date-shifted per patient by whole weeks
+                                  (keeps day-of-week patterns and the gaps
+                                  between one patient's studies, breaks the
                                   link to the real calendar date)
     7. All PHI columns removed entirely from the output schema, not just
        blanked -- an empty column is still a column an audit has to explain.
 
-This is a teaching / demo implementation. For a real deployment, use
-Amazon Comprehend Medical's PHI detection (DetectPHI) as the production
-path -- see the README for a working, commented example call.
+This is the CSV teaching demo. The token, date-shift and redaction logic is
+shared with the DICOM pipeline (src/dicom_deid), so a patient gets the same
+token here as in the DICOM database. For free text in production, use
+Amazon Comprehend Medical's DetectPHI -- see
+deidentify_with_comprehend_medical.py.
 """
 
 import argparse
 import csv
-import hashlib
-import random
-import re
-from datetime import datetime, timedelta
+from datetime import date
+
+from dicom_deid.pseudonym import age_at, age_band, date_shift_days, patient_token, shift_date
+from dicom_deid.text_deid import redact_free_text
 
 # Fields that must never appear in the de-identified output.
 PHI_COLUMNS = [
@@ -48,82 +51,35 @@ QUASI_IDENTIFIER_COLUMNS_TO_DROP = [
     "patient_age",  # superseded by age_band
 ]
 
-# Very small illustrative name-pattern matcher for the burned_in_annotation
-# free-text field. A real pipeline uses Comprehend Medical's DetectPHI
-# instead of regex -- this is here so the demo has something visible to
-# show working end-to-end without an AWS call.
-NAME_LIKE_PATTERN = re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b|PT: ?[A-Za-z]+")
-# Dates in free text are identifying too (e.g. combined with a known visit
-# date, they can re-link a "redacted" record) -- catch ISO dates as well.
-DATE_LIKE_PATTERN = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-
-
-def tokenize_patient_id(patient_id: str, salt: str = "workshop-demo-salt") -> str:
-    """
-    One-way token: same input always produces the same token (so repeat
-    studies for one patient still link together), but the token cannot be
-    reversed back to the original MRN.
-    """
-    digest = hashlib.sha256(f"{salt}:{patient_id}".encode()).hexdigest()
-    return f"PT-{digest[:10].upper()}"
-
-
-def to_age_band(birth_date_str: str) -> str:
-    """Collapse an exact birth date into a 10-year band, e.g. '40-49'."""
-    dob = datetime.fromisoformat(birth_date_str).date()
-    today = datetime.today().date()
-    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-    band_start = (age // 10) * 10
-    return f"{band_start}-{band_start + 9}"
-
-
-def shift_date(date_str: str, patient_token: str) -> str:
-    """
-    Shift a date by a consistent, per-patient offset derived from their
-    token. Preserves relative timing between studies for the same patient
-    while breaking the link to the real calendar date.
-    """
-    seed = int(hashlib.sha256(patient_token.encode()).hexdigest(), 16) % 365
-    offset = timedelta(days=seed - 182)  # +/- ~6 months
-    d = datetime.fromisoformat(date_str).date()
-    return (d + offset).isoformat()
-
-
-def redact_free_text(text: str) -> str:
-    """Redact anything name-shaped out of a free-text field."""
-    if not text:
-        return ""
-    text = NAME_LIKE_PATTERN.sub("[REDACTED]", text)
-    text = DATE_LIKE_PATTERN.sub("[REDACTED-DATE]", text)
-    return text
-
 
 def deidentify_record(raw: dict) -> dict:
-    patient_token = tokenize_patient_id(raw["patient_id"])
-    age_band = to_age_band(raw["patient_birth_date"])
-    shifted_date = shift_date(raw["study_date"], patient_token)
+    token = patient_token(raw["patient_id"])
+    study_date = date.fromisoformat(raw["study_date"])
+    # Age at the time of the study, not today -- otherwise the output
+    # changes depending on the day the script is run.
+    band = age_band(age_at(date.fromisoformat(raw["patient_birth_date"]), study_date))
+    shifted_date = shift_date(study_date, date_shift_days(token)).isoformat()
     redacted_annotation = redact_free_text(raw["burned_in_annotation"])
 
     fields_removed = ",".join(PHI_COLUMNS + QUASI_IDENTIFIER_COLUMNS_TO_DROP)
 
     drop_cols = set(PHI_COLUMNS) | set(QUASI_IDENTIFIER_COLUMNS_TO_DROP)
     record = {k: v for k, v in raw.items() if k not in drop_cols}
-    record["patient_token"] = patient_token
-    record["age_band"] = age_band
+    del record["study_date"]  # original date dropped entirely
+    record["patient_token"] = token
+    record["age_band"] = band
     record["study_date_shifted"] = shifted_date
-    record["study_date"] = None  # drop original date entirely
     record["burned_in_annotation_redacted"] = redacted_annotation
     record["deid_status"] = "COMPLETE"
     record["phi_fields_removed"] = fields_removed
-    del record["study_date"]
 
     return record
 
 
 def main():
     parser = argparse.ArgumentParser(description="De-identify synthetic study metadata")
-    parser.add_argument("--in", dest="infile", default="../data/raw_studies.csv")
-    parser.add_argument("--out", dest="outfile", default="../data/deidentified_studies.csv")
+    parser.add_argument("--in", dest="infile", default="data/raw_studies.csv")
+    parser.add_argument("--out", dest="outfile", default="data/deidentified_studies.csv")
     args = parser.parse_args()
 
     with open(args.infile, newline="", encoding="utf-8") as f:
