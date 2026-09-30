@@ -1,0 +1,23 @@
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Generated local data (synthetic DICOM, local DB, de-identified output)
+data/dicom/
+data/db/
+data/referral_letters_deid/
+
+# Local tooling / archives
+.claude/
+*.zip

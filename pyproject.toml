@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dicom-deid"
+version = "0.1.0"
+description = "Read DICOM, extract metadata, de-identify, and store in a local database (Phase 0)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Syed Haider Ali" }]
+dependencies = [
+    "pydicom>=3.0,<4",
+    "sqlalchemy>=2.0,<3",
+    "faker>=20.0",
+]
+
+[project.optional-dependencies]
+aws = ["boto3>=1.28"]
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+dicom-deid = "dicom_deid.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
