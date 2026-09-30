@@ -429,6 +429,7 @@ DICOMtoAWSHealthcare/
 │   ├── pipeline.py             ingest orchestration, quarantine, audit, report
 │   ├── synthetic.py            synthetic "dirty" DICOM generator
 │   └── text_deid.py            regex redaction for free text and letters
+├── tools/sync_to_main.py       tests + secret scan + push + PR + merge
 ├── scripts/                    workshop demos (Path A / Path B / Comprehend Medical) + leak_scan.py
 ├── tests/                      pytest suite
 └── data/

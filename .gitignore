@@ -19,5 +19,4 @@ data/db/
 data/referral_letters_deid/
 
 # Local tooling / archives
-.claude/
 *.zip
