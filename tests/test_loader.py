@@ -8,8 +8,15 @@ from conftest import REPO_ROOT
 from dicom_deid.cli import main as cli_main
 from dicom_deid.loader import export_png, iter_frames, load_frames, read_info, to_uint8
 
-# DICOM files placed by hand in data/ (git-ignored). Tests over them run only where they exist.
-LOCAL_DICOM = sorted(p for p in (REPO_ROOT / "data").glob("*") if p.suffix.lower() in (".dcm", ".dicom"))
+# Sample DICOM files committed under tests/data/dicom/, plus any extra files
+# placed by hand in data/ (git-ignored, so those run only where they exist).
+def _dicom_files(folder):
+    return sorted(p for p in folder.glob("*") if p.suffix.lower() in (".dcm", ".dicom"))
+
+
+SAMPLE_DICOM = _dicom_files(REPO_ROOT / "tests" / "data" / "dicom")
+LOCAL_DICOM = SAMPLE_DICOM + [p for p in _dicom_files(REPO_ROOT / "data")
+                              if p.name not in {s.name for s in SAMPLE_DICOM}]
 
 
 @pytest.fixture
@@ -100,7 +107,7 @@ def test_cli_inspect(synthetic_dir, capsys):
     assert ds.PatientID not in out and str(ds.PatientName.family_name) not in out
 
 
-@pytest.mark.skipif(not LOCAL_DICOM, reason="no hand-placed DICOM files in data/")
+@pytest.mark.skipif(not LOCAL_DICOM, reason="no sample DICOM files found")
 @pytest.mark.parametrize("path", LOCAL_DICOM, ids=lambda p: p.name)
 def test_local_dicom_files_fully_decode(path):
     info = read_info(path)

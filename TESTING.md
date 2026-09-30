@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-30
 **Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Path A CSV, Path B letters)
-**Result:** ✅ **37 / 37 automated tests passed** (32 in a fresh clone; 5 more run where the hand-placed DICOM files in `data/` exist). Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **39 / 39 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from the
 public sample files that ship with pydicom. No real patient data was used.
@@ -107,10 +107,8 @@ python scripts/leak_scan.py
 ## 3. Automated tests (pytest)
 
 ```text
-37 passed, 1 warning
+39 passed, 1 warning
 ```
-
-In a fresh clone the 5 tests over hand-placed DICOM files are skipped (the files are git-ignored), giving 32 passed and 5 skipped.
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
 
@@ -168,7 +166,14 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 30 | `test_multiframe_selection_and_uint8` | A 4-frame file yields 4 frames, frame selection returns the right frames, and the 8-bit conversion spans 0–255 | ✅ PASS |
 | 31 | `test_export_png` | PNG export respects `every_nth` and `max_frames` and writes greyscale images | ✅ PASS |
 | 32 | `test_cli_inspect` | `dicom-deid inspect` output shows no patient name or ID | ✅ PASS |
-| 33–37 | `test_local_dicom_files_fully_decode[…]` | Every frame of each hand-placed file in `data/` decodes with the header's dimensions and frame count (runs only where the files exist) | ✅ PASS (all 5 supplied files) |
+| 33–37 | `test_local_dicom_files_fully_decode[…]` | Every frame of each sample file in `tests/data/dicom/` decodes with the header's dimensions and frame count. Extra files placed in `data/` are also tested where present. | ✅ PASS (all 5 sample files) |
+
+### 3.6 Sample files through the pipeline: `tests/test_samples.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 38 | `test_samples_ingest` | All 5 sample files ingest without failure and all are quarantined (XA/US without a burned-in flag). They resolve to 4 patients and 4 series (3 XA, 1 US), because two files share a patient and series. | ✅ PASS |
+| 39 | `test_samples_no_leak` | No patient name, ID, birth date, accession, institution or original UID from the samples appears in the de-identified files or the database | ✅ PASS |
 
 ---
 
@@ -239,15 +244,17 @@ Nine public sample files were ingested together:
 
 ✅ 0 failures, and every quarantine decision was correct.
 
-### 4.4 Externally supplied DICOM files (not committed)
+### 4.4 Sample DICOM files (`tests/data/dicom/`)
 
 The repo owner supplied five DICOM files for testing. They carry patient
-identity fields and have no de-identification markers, so they were
-**treated as potentially real data**:
-
-- processed in a temporary folder outside the repo, then deleted
-- never committed; `.gitignore` now excludes `*.dcm` / `*.DCM` everywhere
-- only counts and outcomes were recorded, never names, IDs or dates
+identity fields and have no de-identification markers, so they were first
+**treated as potentially real data**: processed outside the repo, with only
+counts and outcomes recorded. A check of the patient-name fields, which
+reported only whether a marker was present and never the value, showed every
+file carries the **"Rubo" demo placeholder**. They are the public **Rubo Medical
+demo sample files**, and the repo owner then committed them under
+`tests/data/dicom/` as permanent test data. Any other DICOM file stays
+git-ignored (`*.dcm` / `*.DCM`).
 
 | File | Modality | Compression | Frames | Outcome | Private tags removed |
 |---|---|---|---|---|---|
