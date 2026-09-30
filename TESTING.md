@@ -1,7 +1,7 @@
 # Testing Report: Phase 0
 
 **Date:** 2026-09-30
-**Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Path A CSV, Path B letters)
+**Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters)
 **Result:** ✅ **39 / 39 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from the
@@ -65,7 +65,7 @@ ones are listed first.
 | `datetime` | Date shifting, age-at-study calculation, audit timestamps (UTC) |
 | `pathlib`, `io` | Cross-platform file paths; writing DICOM to memory before saving (so the file hash is computed on exactly what is written) |
 | `argparse` | Command-line options for `dicom-deid` and all scripts |
-| `csv`, `json` | Path A CSV input/output; JSON output of `ingest` and `report` |
+| `csv`, `json` | Demo 1 CSV input/output; JSON output of `ingest` and `report` |
 | `random` | Seeded randomness for the synthetic generators (repeatable output) |
 | `dataclasses`, `collections` | The `DeidResult` and `IngestSummary` result objects; counting de-identification actions |
 | `os`, `warnings`, `sys` | Reading environment variables; warning when the development secret is in use; script exit codes |
@@ -302,7 +302,7 @@ git-ignored (`*.dcm` / `*.DCM`).
 | 5 | `patient_age` was computed from the year only | Off by up to one year | Proper age at the study date |
 | 6 | Each of the 120 CSV records had a unique patient | Patient linkage, the main point of the token, was never demonstrated | About 35% repeat patients (76 patients / 120 studies) |
 | 7 | Token was SHA-256 with a hard-coded public salt | MRNs could be brute-forced back from tokens | HMAC-SHA256 with the secret `DEID_SECRET` |
-| 8 | README described a Path B (letters) de-identification step that did not exist | Documentation did not match the code | Added `scripts/deidentify_referral_letters.py` |
+| 8 | README described a referral-letter (Demo 2) de-identification step that did not exist | Documentation did not match the code | Added `scripts/deidentify_referral_letters.py` |
 
 ### 5.2 In the new code (caught by the tests before release)
 

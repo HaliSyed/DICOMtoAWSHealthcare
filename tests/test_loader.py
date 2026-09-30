@@ -15,8 +15,8 @@ def _dicom_files(folder):
 
 
 SAMPLE_DICOM = _dicom_files(REPO_ROOT / "tests" / "data" / "dicom")
-LOCAL_DICOM = SAMPLE_DICOM + [p for p in _dicom_files(REPO_ROOT / "data")
-                              if p.name not in {s.name for s in SAMPLE_DICOM}]
+LOCAL_DICOM = SAMPLE_DICOM + [p for folder in (REPO_ROOT / "data", REPO_ROOT / "data" / "incoming")
+                              for p in _dicom_files(folder) if p.name not in {s.name for s in SAMPLE_DICOM}]
 
 
 @pytest.fixture

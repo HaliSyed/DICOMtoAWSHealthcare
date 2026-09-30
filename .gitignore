@@ -21,6 +21,9 @@ __pycache__/
 *.dicom
 DICOMDIR
 
+# Downloaded test data for local use (DICOM often has no file extension)
+data/incoming/
+
 # Generated local data (synthetic DICOM, local DB, de-identified output)
 data/dicom/
 data/db/
