@@ -1,0 +1,3 @@
+# Installs the dicom_deid package (editable) plus AWS and test extras.
+# For PostgreSQL instead of SQLite, also: pip install -e ".[postgres]"
+-e .[aws,dev]
