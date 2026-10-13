@@ -4,6 +4,7 @@
     python generate.py --variants 3          # 3 people / statements / shipments per region
     python generate.py --seed 7 --out D:/tmp/ds --overwrite
     python generate.py --sections fraud --cases ID01,BK04,TR02
+    python generate.py --custom examples/custom_cases_uae.json   # only your own cases (see HOWTO.md)
 
 Output (see README.md for details):
     01_pristine_digital/   native PDFs with text layer + MT940/CAMT.053/OFX/MT700/CII
@@ -27,6 +28,7 @@ from datetime import date
 from pathlib import Path
 
 from fraudgen import banking as B
+from fraudgen import custom as C
 from fraudgen import degrade as D
 from fraudgen import fraud as F
 from fraudgen import identity as I
@@ -143,8 +145,9 @@ def gen_degraded(root: Path, seed: int, rows: list) -> None:
         print(f"  degraded {i}/{len(pristine)}: {rel.as_posix()}", flush=True)
 
 
-def write_manifest(root: Path, rows: list) -> Path:
-    path = root / "manifest.csv"
+def write_manifest(root: Path, rows: list, path: Path | None = None) -> Path:
+    path = path or root / "manifest.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)
         w.writeheader()
@@ -163,20 +166,32 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--as-of", type=date.fromisoformat, default=date(2026, 10, 13),
                     help="reference 'today' for expiry and statement periods (YYYY-MM-DD)")
     ap.add_argument("--variants", type=int, default=1, help="people / statements / shipments per region")
-    ap.add_argument("--sections", default="identity,bank,trade,degraded,fraud",
-                    help="comma list of identity,bank,trade,degraded,fraud")
+    ap.add_argument("--sections", default=None,
+                    help="comma list of identity,bank,trade,degraded,fraud (default: all of them, "
+                         "or none when --custom is given)")
     ap.add_argument("--cases", default="", help="only these fraud case ids, e.g. ID01,BK04")
     ap.add_argument("--overwrite", action="store_true", help="delete existing tier folders in --out first")
+    ap.add_argument("--custom", type=Path, help="JSON file of your own cases (HOWTO.md). Alone, it adds "
+                    "only those cases under 04_adversarial_fraud/custom/ and leaves the rest untouched")
     a = ap.parse_args(argv)
 
     root: Path = a.out.resolve()
-    sections = set(a.sections.split(","))
-    existing = [t for t in TIERS if (root / t).exists()]
-    if existing and not a.overwrite:
-        print(f"{root} already has {existing}. Use --overwrite or another --out.", file=sys.stderr)
-        return 2
-    for t in existing:
-        shutil.rmtree(root / t)
+    if a.sections:
+        sections = set(a.sections.split(","))
+    else:
+        sections = set() if a.custom else {"identity", "bank", "trade", "degraded", "fraud"}
+    if a.custom is not None:
+        sections.add("custom")
+        if not a.custom.exists():
+            print(f"custom spec not found: {a.custom}", file=sys.stderr)
+            return 2
+    if sections - {"custom"}:
+        existing = [t for t in TIERS if (root / t).exists()]
+        if existing and not a.overwrite:
+            print(f"{root} already has {existing}. Use --overwrite or another --out.", file=sys.stderr)
+            return 2
+        for t in existing:
+            shutil.rmtree(root / t)
     root.mkdir(parents=True, exist_ok=True)
 
     rows: list[dict] = []
@@ -197,7 +212,18 @@ def main(argv: list[str] | None = None) -> int:
         print("adversarial + edge cases ...", flush=True)
         only = {c.strip() for c in a.cases.split(",") if c.strip()} or None
         rows += F.run_cases(root / TIERS[3], a.as_of, a.seed, only)
-    m = write_manifest(root, rows)
+    if "custom" in sections:
+        print(f"custom cases from {a.custom} ...", flush=True)
+        try:
+            custom_rows = C.run_custom(a.custom, root / TIERS[3], a.as_of, a.seed)
+        except C.SpecError as e:
+            print(f"error in custom spec: {e}", file=sys.stderr)
+            return 2
+        rows += custom_rows
+    if sections == {"custom"}:
+        m = write_manifest(root, rows, root / TIERS[3] / "custom" / "manifest_custom.csv")
+    else:
+        m = write_manifest(root, rows)
 
     counts: dict[str, int] = {}
     for r in rows:
@@ -205,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n{len(rows)} files -> {root}")
     for t in TIERS:
         print(f"  {t}: {counts.get(t, 0)}")
-    print(f"  manifest: {m.name}")
+    print(f"  manifest: {m.relative_to(root).as_posix()}")
     return 0
 
 

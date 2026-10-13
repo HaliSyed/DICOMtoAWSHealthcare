@@ -280,3 +280,60 @@ def test_edge_cases_render_as_intended(cases):
     de = _gt(f["EC04"], "de_id_card.json")
     assert de["mrz"][2].startswith("MUELLER<LUEDENSCHEIDT<<JUERGEN")
     assert de["printed_fields"]["surname"] == "MÜLLER-LÜDENSCHEIDT"
+
+
+# --- custom cases (examples/custom_cases_uae.json) -----------------------------------------
+
+from fraudgen import custom as C  # noqa: E402
+from fraudgen.mrz import break_check_digit, retouch  # noqa: E402
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "custom_cases_uae.json"
+
+
+def test_mrz_retouch_keeps_check_digits_valid():
+    a = td3("P", "UTO", "ERIKSSON", "ANNA MARIA", "L898902C3", "UTO", "740812", "F", "120415", "ZE184226B")
+    assert retouch(a, dob="800101") == td3("P", "UTO", "ERIKSSON", "ANNA MARIA", "L898902C3", "UTO", "800101", "F",
+                                            "120415", "ZE184226B")
+    b = td1("I", "UTO", "ERIKSSON", "ANNA MARIA", "D23145890", "UTO", "740812", "F", "120415")
+    assert td1_ok(*retouch(b, number="X12345678", expiry="300101"))
+    assert not td3_ok(*break_check_digit(a, "dob"))
+
+
+@pytest.fixture(scope="module")
+def custom(tmp_path_factory):
+    root = tmp_path_factory.mktemp("custom")
+    rows = C.run_custom(EXAMPLE, root, AS_OF, 99)
+    folders = {p.parent.name.split("_")[0]: p.parent for p in root.glob("custom/*/case.json")}
+    return rows, folders
+
+
+def test_example_spec_produces_every_case(custom):
+    rows, folders = custom
+    assert set(folders) == {f"CU{i:02d}" for i in range(1, 11)}
+    assert all(Path(r["file"]).exists() for r in rows)
+
+
+def test_custom_mutations_land(custom):
+    f = custom[1]
+    cu01 = _gt(f["CU01"], "passport_1.json")
+    assert cu01["holder"]["expiry_date"] < AS_OF.isoformat()
+    assert cd(cu01["mrz"][1][0:9]) != cu01["mrz"][1][9]
+    assert cd(cu01["mrz"][1][21:27]) == cu01["mrz"][1][27]  # expiry change kept the MRZ consistent
+    cu02 = _gt(f["CU02"], "emirates_id_1.json")
+    assert AS_OF.year - int(cu02["holder"]["dob"][:4]) == 16 and td1_ok(*cu02["mrz"])
+    cu03 = _gt(f["CU03"], "passport.json")
+    assert cu03["holder"]["dob"] == "1986-07-02" and td3_ok(*cu03["mrz"]) and cu03["mrz"][1][13:19] == "860702"
+    cu05 = _gt(f["CU05"], "statement.json")
+    assert cu05["printed_closing_balance"] > cu05["closing_balance"] * 2 and cu05["tampers"]
+    cu07 = _gt(f["CU07"], "passport_1.json")
+    assert "MOHAMED" in cu07["mrz"][0] and td3_ok(*cu07["mrz"])
+    assert not ck.verhoeff_valid(_gt(f["CU09"], "aadhaar_1.json")["holder"]["aadhaar_number"])
+    assert _gt(f["CU09"], "pan_card_2.json")["holder"]["pan"][3] == "C"
+
+
+def test_bad_spec_names_the_problem(tmp_path):
+    spec = tmp_path / "bad.json"
+    spec.write_text('{"cases":[{"id":"X","person":{"region":"UAE"},"documents":[{"type":"emirates_id",'
+                    '"mutations":[{"op":"explode"}]}]}]}', encoding="utf-8")
+    with pytest.raises(C.SpecError, match="case X document 1 mutation 1: unknown identity op"):
+        C.run_custom(spec, tmp_path, AS_OF, 1)

@@ -7,6 +7,23 @@ NOT VALID**, and every file has a ground-truth JSON next to it.
 
 This folder only produces test data. It contains no detection logic.
 
+**Guides**
+
+- This README: what the dataset contains, coverage, and the built-in fraud cases.
+- [HOWTO.md](HOWTO.md): step by step, how to generate everything, pick cases, and
+  **write your own fraud cases in a JSON file** (with a full option reference).
+- [examples/custom_cases_uae.json](examples/custom_cases_uae.json): 10 ready-made
+  custom cases, 8 of them for the UAE.
+
+- [What is synthetic and what is real](#what-is-synthetic-and-what-is-real)
+- [Quick start](#quick-start)
+- [Output layout](#output-layout)
+- [Coverage](#coverage), including [UAE coverage](#uae-coverage)
+- [Fraud and edge cases](#fraud-and-edge-cases-04-tier)
+- [Custom cases](#custom-cases)
+- [Known limitations](#known-limitations)
+- [Code layout](#code-layout)
+
 ## What is synthetic and what is real
 
 | Real (so parsers are tested properly) | Synthetic (so nothing can be misused) |
@@ -27,7 +44,8 @@ venv\Scripts\activate                       # from the repository root
 pip install -r frauddetect/requirements.txt
 cd frauddetect
 python generate.py                          # ~4 min, writes ./test_dataset
-python -m pytest tests                      # generator self-checks
+python -m pytest tests                      # generator self-checks (33 tests, ~2 min)
+python generate.py --custom examples/custom_cases_uae.json   # add your own cases (HOWTO.md)
 ```
 
 Options:
@@ -37,6 +55,7 @@ python generate.py --variants 3                       # 3 people / statements / 
 python generate.py --seed 42 --as-of 2027-01-31 --out D:/data/fraud_ds --overwrite
 python generate.py --sections identity,bank            # skip trade, degraded tiers and fraud cases
 python generate.py --sections fraud --cases ID20,BK05  # just some adversarial cases
+python generate.py --custom my_cases.json             # only your own cases, rest of the dataset untouched
 ```
 
 The same seed, as-of date and fonts always produce the same documents. Fonts
@@ -85,6 +104,23 @@ finding rather than just per document.
 | AU | Driver licence (NSW, VIC, QLD), Medicare card, passport | Card number separate from licence number (on the back for VIC), Medicare check digit |
 | NZ | Driver licence, passport | Licence number + version number |
 | EU | German ID card (TD1), Spanish DNI (TD1), French/German/Spanish passports | Multilingual labels, `D<<` code, DNI letter, ICAO transliteration (Ü → UE) |
+
+### UAE coverage
+
+The UAE is covered in every part of the dataset:
+
+| Area | What is generated |
+|---|---|
+| Identity | **Emirates ID** (front with Arabic/English fields; back with card number, occupation and TD1 MRZ carrying the 15-digit ID), **UAE passport** (bilingual labels, Arabic name, TD3 MRZ `P<ARE…`) |
+| Bank | **Al Waha National Bank PJSC** (fictional) AED statements: `AE` IBAN (23 chars, mod-97), AED shown as `AED`, `Dh` or `د.إ`, Arabic title, personal and corporate accounts, MT940 / CAMT.053 / OFX |
+| Trade | **UAE→Pakistan** (Jebel Ali `AEJEA` → Karachi) with a UAE seller and a UAE corporate statement, and **Australia→UAE** (→ Jebel Ali) with a UAE issuing bank |
+| Built-in fraud cases | ID01 passport MRZ, ID05 Emirates ID Luhn, ID06 Emirates ID birth-year segment, ID18 expiry before issue, BK01 IBAN, BK12 cash deposit before cut-off, BK13 someone else's statement, TR01, TR02, TR04, TR05, TR10 (UAE shipments) |
+| Edge cases | EC01 MOHAMMAD vs Mohammed, EC02 "SHEIKH" in given names |
+| Custom examples | CU01–CU08 in `examples/custom_cases_uae.json`: expired passport, minor's Emirates ID, Emirates ID vs passport DOB, DOB overlay with phone photo, AED salary overlay + inflated balance, funds parking, name spelling, Jebel Ali shipment with diverted payment |
+
+Not yet covered for the UAE: UAE driving licence, trade licence, Ejari
+tenancy contract, salary certificate, visa or residence permit page. These can
+be added as new document types.
 
 ### Bank statements
 
@@ -169,6 +205,39 @@ account on that statement.
 Most identity cases also include a phone photo (`*_photo.jpg`) of the tampered
 document, because that is how most fraudulent uploads arrive.
 
+## Custom cases
+
+You can define your own fraud cases in a JSON file: who is on the documents,
+which documents are in the submission, and which defects to plant. No Python is
+needed. Example: an expired UAE passport with a bad MRZ check digit:
+
+```json
+{"cases": [{
+  "id": "CU01", "name": "uae_passport_expired_and_bad_mrz",
+  "expected_result": "fail",
+  "expected_findings": ["document_expired", "mrz_check_digit_document_number"],
+  "person": {"region": "UAE", "given": "Omar", "surname": "Al Hammadi",
+             "given_native": "عمر", "surname_native": "الحمادي", "sex": "M", "dob": "1988-03-14"},
+  "documents": [{"type": "passport", "photo": true, "mutations": [
+    {"op": "expire", "days_ago": 45},
+    {"op": "break_check_digit", "target": "mrz_document_number"}
+  ]}]
+}]}
+```
+
+```bash
+python generate.py --custom my_cases.json
+# -> test_dataset/04_adversarial_fraud/custom/CU01_uae_passport_expired_and_bad_mrz/
+```
+
+The options:
+
+- **Identity:** expire, set_expiry, set_issue, set_dob, break_check_digit, set_number, set_name, set_field, set_mrz_country, set_barcode_field, overlay.
+- **Bank statements:** edit_amount, overlay, inflate_closing, add_transaction, move_transaction, shift_period, mixed_number_format, alter_structured_files, break_check_digit, set_account, set_holder.
+- **Trade:** divert_payment, late_shipment, scale_quantity, line_amount, break_container, gross_weight, set.
+
+All of them are explained in [HOWTO.md](HOWTO.md#5-option-reference).
+
 ## Known limitations
 
 - **Bengali and Devanagari text layers are unreliable.** The PDFs render these
@@ -194,9 +263,13 @@ document, because that is how most fraudulent uploads arrive.
 | `fraudgen/banking.py` | Statements, MT940, CAMT.053, OFX |
 | `fraudgen/trade.py` | Invoice, packing list, B/L, L/C, MT700, CII |
 | `fraudgen/degrade.py` | Scan and phone-capture effects |
-| `fraudgen/fraud.py` | Adversarial and edge-case catalogue |
+| `fraudgen/fraud.py` | Built-in adversarial and edge-case catalogue |
+| `fraudgen/custom.py` | Reads custom-case JSON files and applies the mutations |
+| `examples/custom_cases_uae.json` | Example custom cases (UAE, India, UK) |
+| `HOWTO.md` | Step-by-step guide and option reference |
 | `fraudgen/render.py` | PDF drawing helpers, fonts, SPECIMEN watermark |
 | `tests/test_fraudgen.py` | Checks that genuine documents pass every rule and that each planted defect is present |
 
-To add a fraud case, add a function decorated with `@case(...)` in
+To add a case without code, use a custom JSON file ([HOWTO.md](HOWTO.md)). To
+add a permanent built-in case, add a function decorated with `@case(...)` in
 `fraudgen/fraud.py` and a matching assertion in the tests.

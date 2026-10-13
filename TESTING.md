@@ -214,7 +214,7 @@ The single warning is expected. pydicom complains about the deliberately truncat
 ### 3.7 Fraud-detection generator: `frauddetect/tests/test_fraudgen.py` (run separately)
 
 Not collected by the root `pytest` run, because `testpaths = ["tests"]`. Run with
-`python -m pytest frauddetect/tests`. Result: **29 passed**.
+`python -m pytest frauddetect/tests`. Result: **33 passed**.
 
 | Test | What it proves |
 |---|---|
@@ -225,6 +225,7 @@ Not collected by the root `pytest` run, because `testpaths = ["tests"]`. Run wit
 | `test_genuine_statements_reconcile` (×11 banks) | Valid IBAN/ABA/IFSC/BSB/NZ formats, running balance adds up, every transaction is inside the period, MT940 and CAMT.053 closing balances match |
 | `test_genuine_shipment_is_consistent` (×4 lanes) | Container check digits, invoice within the L/C amount + tolerance, date order L/C issue < invoice ≤ on board ≤ latest shipment < expiry, weights match |
 | `test_planted_*_defects_present`, `test_edge_cases_render_as_intended` | For a sample of 13 cases, the planted defect is really in the output (bad check digit, broken balance, Photoshop producer + incremental save, diverted account, `04/05/2026` printed in both statements, MRZ `MUELLER<LUEDENSCHEIDT`) |
+| `test_mrz_retouch_keeps_check_digits_valid`, `test_example_spec_produces_every_case`, `test_custom_mutations_land`, `test_bad_spec_names_the_problem` | Custom cases: MRZ edits keep check digits valid; all 10 cases in `examples/custom_cases_uae.json` are generated with their planted defects (expired + bad MRZ digit, age 16, cross-document DOB, inflated balance, MOHAMED in MRZ, Aadhaar/PAN failures); a bad spec gives an error naming the case, document and mutation |
 
 ## 4. Manual / end-to-end checks
 
