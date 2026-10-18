@@ -44,7 +44,6 @@ data enters Path B's managed services.
 - [Roadmap](#roadmap)
 - [UAE compliance notes](#uae-compliance-notes)
 - [Known limitations](#known-limitations-phase-0)
-- [Fraud-detection test documents](#fraud-detection-test-documents)
 - [Repository layout](#repository-layout)
 
 ---
@@ -494,24 +493,6 @@ available.
 
 ---
 
-## Fraud-detection test documents
-
-`frauddetect/` is a separate tool that generates synthetic identity documents,
-bank statements and trade documents for testing a document fraud-detection
-pipeline. It covers the UAE, UK, US, Pakistan, India, Bangladesh, Australia,
-New Zealand and the EU. Output comes in four tiers (pristine PDF, scanned,
-phone photo, adversarial), and 47 planted fraud cases plus 6 must-pass edge
-cases each carry the expected findings. You can also define your own cases
-in a JSON file (see `frauddetect/HOWTO.md`). Every page is marked SPECIMEN. It does
-not share code or dependencies with `dicom_deid`. See
-[`frauddetect/README.md`](frauddetect/README.md).
-
-```bash
-pip install -r frauddetect/requirements.txt
-python frauddetect/generate.py        # writes frauddetect/test_dataset (git-ignored)
-python -m pytest frauddetect/tests
-```
-
 ## Repository layout
 
 ```text
@@ -537,7 +518,6 @@ DICOMtoAWSHealthcare/
 ├── tools/sync_to_main.py       tests + secret scan + push + PR + merge
 ├── scripts/                    workshop demos (Demo 1 / Demo 2 / Comprehend Medical) + leak_scan.py
 ├── AWS-Managed-Healthcare/     Path B: AWS-managed setup guide (IaC to follow)
-├── frauddetect/                synthetic ID / bank / trade documents for fraud-detection testing
 ├── tests/                      pytest suite
 │   └── data/dicom/             5 public sample DICOM files (Rubo Medical demo set)
 └── data/
