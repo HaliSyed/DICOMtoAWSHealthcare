@@ -39,6 +39,3 @@ data/referral_letters_deid/
 
 # Local tooling / archives
 *.zip
-
-# Fraud-detection test documents are generated (frauddetect/generate.py), not committed
-frauddetect/test_dataset/

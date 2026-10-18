@@ -1,7 +1,0 @@
-# Synthetic fraud-detection test document generator (separate from the dicom-deid package)
-pymupdf>=1.24       # PDF writing with HarfBuzz shaping (Arabic, Urdu, Bengali, Devanagari), rasterising
-pdf417gen>=0.7      # PDF417 barcodes on the back of US driving licences (AAMVA payload)
-faker>=20.0         # Western-region names and addresses
-numpy>=1.24         # noise, glare and perspective maths for scan / phone-capture tiers
-pillow>=10.0        # image processing for the degraded tiers
-pytest>=8           # tests/test_fraudgen.py

@@ -88,17 +88,6 @@ ones are listed first.
 | **HAPI FHIR JPA server** (or AWS HealthLake) | 2 | The FHIR server itself (a Java service running on PostgreSQL), subject to UAE data-residency checks |
 | **pgvector** | Later | Vector similarity search inside PostgreSQL, only once the AI phase produces image embeddings |
 
-### 1.7 Fraud-detection test data generator (`frauddetect/`)
-
-A separate tool with its own `frauddetect/requirements.txt`. It is not part of
-the `dicom-deid` package and adds nothing to `pyproject.toml`. It reuses Faker,
-numpy and Pillow from above and adds:
-
-| Library | Version tested | What it is | Purpose in this project |
-|---|---|---|---|
-| **PyMuPDF** (`pymupdf`) | 1.28.2 | Python bindings for the MuPDF PDF engine | Writes the synthetic PDFs. Its HTML layout uses HarfBuzz, so Arabic, Urdu, Bengali and Devanagari are shaped correctly (Pillow without libraqm is not). It also rasterises pages for the scanned and phone tiers, edits PDFs for the tamper cases (incremental saves), and extracts text in the tests. |
-| **pdf417gen** | 0.8.1 | Pure-Python PDF417 barcode encoder | The AAMVA barcode on the back of the synthetic US driving licences |
-
 ## 2. How to reproduce
 
 ```bash
@@ -210,22 +199,6 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 39 | `test_samples_no_leak` | No patient name, ID, birth date, accession, institution or original UID from the samples appears in the de-identified files or the database | ✅ PASS |
 
 ---
-
-### 3.7 Fraud-detection generator: `frauddetect/tests/test_fraudgen.py` (run separately)
-
-Not collected by the root `pytest` run, because `testpaths = ["tests"]`. Run with
-`python -m pytest frauddetect/tests`. Result: **33 passed**.
-
-| Test | What it proves |
-|---|---|
-| `test_checksums_match_published_examples`, `test_mrz_matches_icao_specimen` | Check-digit algorithms and the MRZ builder reproduce published reference values (ICAO 9303 specimen, IBAN, ABA, ISO 6346, DNI) |
-| `test_mrz_icao_transliteration` | Ü→UE, ß→SS etc. in the MRZ |
-| `test_genuine_identity_documents_pass_all_rules` | For every region, 4 people: MRZ check digits, Emirates ID Luhn + birth year, Aadhaar Verhoeff, PAN structure, CNIC gender digit, UK licence DOB encoding, Medicare, DNI letter, BD NID formats, AAMVA barcode DOB, CNIC inside Pakistani passport MRZ, issue < expiry, not expired |
-| `test_rendered_id_has_searchable_text_and_specimen` | The PDF text layer holds the real ID number and the Arabic name, every page says SPECIMEN, and fonts are subset |
-| `test_genuine_statements_reconcile` (×11 banks) | Valid IBAN/ABA/IFSC/BSB/NZ formats, running balance adds up, every transaction is inside the period, MT940 and CAMT.053 closing balances match |
-| `test_genuine_shipment_is_consistent` (×4 lanes) | Container check digits, invoice within the L/C amount + tolerance, date order L/C issue < invoice ≤ on board ≤ latest shipment < expiry, weights match |
-| `test_planted_*_defects_present`, `test_edge_cases_render_as_intended` | For a sample of 13 cases, the planted defect is really in the output (bad check digit, broken balance, Photoshop producer + incremental save, diverted account, `04/05/2026` printed in both statements, MRZ `MUELLER<LUEDENSCHEIDT`) |
-| `test_mrz_retouch_keeps_check_digits_valid`, `test_example_spec_produces_every_case`, `test_custom_mutations_land`, `test_bad_spec_names_the_problem` | Custom cases: MRZ edits keep check digits valid; all 10 cases in `examples/custom_cases_uae.json` are generated with their planted defects (expired + bad MRZ digit, age 16, cross-document DOB, inflated balance, MOHAMED in MRZ, Aadhaar/PAN failures); a bad spec gives an error naming the case, document and mutation |
 
 ## 4. Manual / end-to-end checks
 
