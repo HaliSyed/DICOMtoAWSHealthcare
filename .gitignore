@@ -20,6 +20,14 @@ __pycache__/
 *.DCM
 *.dicom
 DICOMDIR
+# The one exception (see README): the five public Rubo Medical demo samples
+# used by the tests. They carry demo placeholder names, not patient data.
+# Only these exact files are allowed; anything else in the folder stays ignored.
+!tests/data/dicom/0002.DCM
+!tests/data/dicom/0003.DCM
+!tests/data/dicom/0004.DCM
+!tests/data/dicom/0009.DCM
+!tests/data/dicom/0020.DCM
 
 # Downloaded test data for local use (DICOM often has no file extension)
 data/incoming/
