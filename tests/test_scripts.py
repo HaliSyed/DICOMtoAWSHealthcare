@@ -1,4 +1,4 @@
-"""The workshop scripts (CSV path A, referral letters path B)."""
+"""The workshop scripts (Demo 1: CSV table, Demo 2: referral letters)."""
 
 import csv
 import subprocess

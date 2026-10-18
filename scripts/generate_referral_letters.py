@@ -3,7 +3,7 @@
 generate_referral_letters.py
 
 Generates fully SYNTHETIC referral-letter text files, standing in for the
-scanned PDFs that would go through the manual / Textract path (Path B).
+scanned PDFs that would go through OCR (Amazon Textract in Path B) and PHI detection.
 
 These are plain .txt files for the workshop repo. In the live session, print
 a few to PDF (or photocopy/scan them) so Textract has something to OCR.

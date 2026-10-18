@@ -13,11 +13,32 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# DICOM files are never committed, wherever they are placed: files added by
+# hand may contain real patient data. Test DICOM is generated (dicom-deid
+# synth) or comes from pydicom's bundled samples.
+*.dcm
+*.DCM
+*.dicom
+DICOMDIR
+# The one exception (see README): the five public Rubo Medical demo samples
+# used by the tests. They carry demo placeholder names, not patient data.
+# Only these exact files are allowed; anything else in the folder stays ignored.
+!tests/data/dicom/0002.DCM
+!tests/data/dicom/0003.DCM
+!tests/data/dicom/0004.DCM
+!tests/data/dicom/0009.DCM
+!tests/data/dicom/0020.DCM
+
+# Downloaded test data for local use (DICOM often has no file extension)
+data/incoming/
+
 # Generated local data (synthetic DICOM, local DB, de-identified output)
 data/dicom/
 data/db/
 data/referral_letters_deid/
 
 # Local tooling / archives
-.claude/
 *.zip
+
+# Fraud-detection test documents are generated (frauddetect/generate.py), not committed
+frauddetect/test_dataset/

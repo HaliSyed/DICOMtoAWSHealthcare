@@ -2,7 +2,7 @@
 """
 deidentify_referral_letters.py
 
-Path B, offline: de-identifies the synthetic referral letters in
+Demo 2, offline: de-identifies the synthetic referral letters in
 data/referral_letters/ (the free-text documents that, in production, would
 go through Amazon Textract for OCR and Amazon Comprehend Medical for PHI
 detection).

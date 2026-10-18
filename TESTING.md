@@ -1,25 +1,103 @@
 # Testing Report: Phase 0
 
 **Date:** 2026-09-30
-**Scope:** DICOM read → extract → de-identify → verify → local DB, plus the workshop scripts (Path A CSV, Path B letters)
-**Result:** ✅ **24 / 24 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
+**Result:** ✅ **39 / 39 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
-All data used in testing is synthetic (Faker, fixed seeds) or comes from the
-public sample files that ship with pydicom. No real patient data was used.
+All data used in testing is synthetic (Faker, fixed seeds) or comes from public
+sources: the sample files that ship with pydicom, and the five Rubo Medical demo
+files in `tests/data/dicom/`. No real patient data was used.
 
 ---
 
 ## 1. Test environment
 
-| Item | Version |
+This section lists every component the tests ran on, what it is for, and where
+this project uses it. Anything marked *planned* is not in the code yet.
+
+### 1.1 Platform
+
+| Item | Version tested | What it is | Purpose in this project |
+|---|---|---|---|
+| **OS** | Windows 10 Pro 10.0.19045 | Operating system of the test machine | The only OS tested so far. The code has no Windows-specific parts (it uses `pathlib` for all paths), but Linux/macOS still need a CI run (see [Not tested](#6-not-tested)). |
+| **Python** | 3.11.9 (minimum 3.10) | The programming language and interpreter | Runs all code. 3.10+ is required because the code uses modern type hints such as `str \| None`. |
+| **SQLite** | 3.45.1 (via Python's built-in `sqlite3` module) | A file-based SQL database engine that needs no server | **The Phase 0 local database** (`data/db/deid.sqlite`). It stores patients, studies, series, instances and the audit log. It was chosen for Phase 0 because it needs no install and works offline, e.g. in a workshop room. PostgreSQL replaces it in Phase 1 without code changes. |
+
+### 1.2 Core libraries (installed with the package)
+
+These are declared under `dependencies` in `pyproject.toml`, so every install gets them.
+
+| Library | Version tested | What it is | Purpose in this project | Used in |
+|---|---|---|---|---|
+| **pydicom** | 3.0.2 | The standard Python library for reading, editing and writing DICOM files | **The core of the pipeline.** It reads DICOM files (any transfer syntax, including compressed, without decoding pixels) and walks every element, including nested sequences. It edits, removes and empties tags, removes private tags, writes the de-identified file with correct file meta, and exports the header as DICOM JSON. Its bundled sample files (`pydicom.data`) are also the real-vendor test set. | `dicom_deid.py`, `verify.py`, `reader.py`, `pipeline.py`, `synthetic.py`, `leak_scan.py`, tests |
+| **SQLAlchemy** | 2.1.1 | A database toolkit and ORM (object-relational mapper) for Python | Defines the tables as Python classes and runs all inserts and queries. It also creates the schema and turns on SQLite foreign keys. **Its main job is database portability:** the same code runs on SQLite now and PostgreSQL in Phase 1 by changing only `DATABASE_URL`, and the JSON column becomes JSONB on PostgreSQL automatically. | `db.py`, `pipeline.py`, tests |
+| **numpy** | 2.4.6 | The standard array library for numerical Python | Holds decoded image frames as arrays. pydicom needs it to decode pixel data, and the loader uses it for display scaling (8-bit conversion, windowing). | `loader.py`, tests |
+| **Pillow** | 12.3.0 | The standard Python imaging library | pydicom's decoder for **JPEG Baseline** and **JPEG 2000** pixel data (the supplied angiography files are JPEG Baseline), and the PNG writer for `export_png` / `dicom-deid inspect --export-png`. | `loader.py` (via pydicom), tests |
+| **Faker** | 40.40.0 | A generator of realistic fake data (names, addresses, phone numbers, dates) | Produces **all synthetic PHI** used in tests: patient and physician names, addresses and phone numbers. It runs with fixed seeds, so outputs are repeatable. This lets the project test de-identification without any real patient data. Note that name lists can change between Faker versions. | `synthetic.py`, `generate_synthetic_data.py`, `generate_referral_letters.py` |
+
+### 1.3 Optional libraries (installed as extras)
+
+Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirements.txt` installs `aws` and `dev`.
+
+| Library | Version tested | Extra | What it is | Purpose in this project |
+|---|---|---|---|---|
+| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 24 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
+| **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
+| **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
+
+### 1.4 Build and install tooling
+
+| Tool | Version | Purpose |
+|---|---|---|
+| **pip** | 26.2.1 | Installs the package and its dependencies from `requirements.txt` |
+| **setuptools** | ≥ 68 (fetched automatically at build time) | Builds the `dicom_deid` package from `pyproject.toml` and creates the `dicom-deid` command |
+| **venv** | built into Python | Keeps this project's libraries in an isolated environment (`venv/`, git-ignored) |
+
+### 1.5 Python standard library modules used
+
+These ship with Python, so there is nothing to install. The security-relevant
+ones are listed first.
+
+| Module | Purpose in this project |
 |---|---|
-| OS | Windows 10 Pro 10.0.19045 |
-| Python | 3.11.9 |
-| pydicom | 3.0.2 |
-| SQLAlchemy | 2.1.1 |
-| Faker | 40.40.0 |
-| pytest | 9.1.1 |
-| Database | SQLite (bundled with Python) |
+| `hmac`, `hashlib` | **Pseudonymisation.** HMAC-SHA256 keyed with `DEID_SECRET` generates patient and accession tokens, remapped UIDs and date-shift offsets. SHA-256 also gives the file fingerprints used in the audit log and the `instances` table. |
+| `re` | Regex redaction of free text (names, dates, phone numbers, addresses) and the verifier's whole-word identifier matching |
+| `uuid` | Builds valid `2.25.*` DICOM UIDs from HMAC output, and generates a unique `run_id` per ingest |
+| `datetime` | Date shifting, age-at-study calculation, audit timestamps (UTC) |
+| `pathlib`, `io` | Cross-platform file paths; writing DICOM to memory before saving (so the file hash is computed on exactly what is written) |
+| `argparse` | Command-line options for `dicom-deid` and all scripts |
+| `csv`, `json` | Demo 1 CSV input/output; JSON output of `ingest` and `report` |
+| `random` | Seeded randomness for the synthetic generators (repeatable output) |
+| `dataclasses`, `collections` | The `DeidResult` and `IngestSummary` result objects; counting de-identification actions |
+| `os`, `warnings`, `sys` | Reading environment variables; warning when the development secret is in use; script exit codes |
+| `subprocess` | Tests run the workshop scripts exactly as a user would, as separate processes |
+
+### 1.6 Planned for later phases (not in the code yet)
+
+| Library / tool | Phase | Purpose |
+|---|---|---|
+| **PostgreSQL 16** + psycopg | 1 | Production database: concurrency, roles, row-level security, encryption, backups |
+| **pylibjpeg** (+ plugins) | 1 | Decode JPEG Extended / Lossless / JPEG-LS, which Pillow cannot (currently reported as not decodable) |
+| **Alembic** | 1 | Database schema migrations (replaces `create_all`) |
+| **pynetdicom** | 1 | Receive images directly from PACS/modalities over the DICOM network protocol (C-STORE SCP) |
+| **hl7apy** or **python-hl7** | 1 | Parse HL7 v2 messages (ADT, ORM/OMI, ORU) so they can be de-identified and linked to DICOM studies |
+| OCR (Amazon Textract / Rekognition, or Tesseract via `pytesseract` for on-premises data) on frames from `loader.iter_frames` | 1 | Find and mask burned-in text in quarantined ultrasound and screenshot images |
+| Defacing tool (e.g. `pydeface`) | 1 | Remove facial features from head CT/MR volumes |
+| **GitHub Actions** | 1 | Continuous integration: run the tests on Linux, macOS and Windows for every push |
+| **fhir.resources** | 2 | Python FHIR R4 models for building and validating `Patient`, `ImagingStudy`, `DiagnosticReport`, etc. |
+| **HAPI FHIR JPA server** (or AWS HealthLake) | 2 | The FHIR server itself (a Java service running on PostgreSQL), subject to UAE data-residency checks |
+| **pgvector** | Later | Vector similarity search inside PostgreSQL, only once the AI phase produces image embeddings |
+
+### 1.7 Fraud-detection test data generator (`frauddetect/`)
+
+A separate tool with its own `frauddetect/requirements.txt`. It is not part of
+the `dicom-deid` package and adds nothing to `pyproject.toml`. It reuses Faker,
+numpy and Pillow from above and adds:
+
+| Library | Version tested | What it is | Purpose in this project |
+|---|---|---|---|
+| **PyMuPDF** (`pymupdf`) | 1.28.2 | Python bindings for the MuPDF PDF engine | Writes the synthetic PDFs. Its HTML layout uses HarfBuzz, so Arabic, Urdu, Bengali and Devanagari are shaped correctly (Pillow without libraqm is not). It also rasterises pages for the scanned and phone tiers, edits PDFs for the tamper cases (incremental saves), and extracts text in the tests. |
+| **pdf417gen** | 0.8.1 | Pure-Python PDF417 barcode encoder | The AAMVA barcode on the back of the synthetic US driving licences |
 
 ## 2. How to reproduce
 
@@ -34,14 +112,36 @@ dicom-deid synth
 dicom-deid ingest
 dicom-deid report
 python scripts/leak_scan.py
+
+# Read the committed sample files (no identifying values are printed)
+dicom-deid inspect tests/data/dicom
 ```
+
+### 2.1 Testing with additional public DICOM files
+
+DICOM test data must come from **public repositories** (sources are listed in the
+[README](README.md#getting-dicom-test-data-public-sources)). Never use hospital or
+patient exports.
+
+```bash
+# 1. download into data/incoming/ (git-ignored as a whole folder, including extension-less DICOM files)
+# 2. vet the files
+dicom-deid inspect data/incoming
+dicom-deid ingest --src data/incoming
+python scripts/leak_scan.py --raw data/incoming     # must report 0 leaks
+# 3. the test suite decodes every frame of each DICOM file found there
+pytest
+```
+
+A file only moves into `tests/data/dicom/` (published) when it is small, public
+and redistributable, and its source is recorded in section 4.4.
 
 ---
 
 ## 3. Automated tests (pytest)
 
 ```text
-24 passed, 1 warning in 4.22s
+39 passed, 1 warning
 ```
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
@@ -90,7 +190,42 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 23 | `test_referral_letter_redaction` | Patient name, DOB, physician (including the repeat in the signature), phone, letter date and military APO address are all removed. The clinic name is kept by design. | ✅ PASS |
 | 24 | `test_referral_letters_script` | The script processes all 10 letters, and no patient name survives | ✅ PASS |
 
+### 3.5 Reading DICOM files: `tests/test_loader.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 25 | `test_read_info_synthetic` | The summary lists which identifying attributes are present, counts private tags, and never includes an identifying value | ✅ PASS |
+| 26–28 | `test_compressed_frames_decode[…]` | JPEG Baseline colour, RLE monochrome and RLE colour pydicom samples decode to the right shape | ✅ PASS |
+| 29 | `test_undecodable_is_reported_not_raised` | A JPEG Extended file (no decoder installed) is reported as not decodable, with the reason, instead of crashing | ✅ PASS |
+| 30 | `test_multiframe_selection_and_uint8` | A 4-frame file yields 4 frames, frame selection returns the right frames, and the 8-bit conversion spans 0–255 | ✅ PASS |
+| 31 | `test_export_png` | PNG export respects `every_nth` and `max_frames` and writes greyscale images | ✅ PASS |
+| 32 | `test_cli_inspect` | `dicom-deid inspect` output shows no patient name or ID | ✅ PASS |
+| 33–37 | `test_local_dicom_files_fully_decode[…]` | Every frame of each sample file in `tests/data/dicom/` decodes with the header's dimensions and frame count. Extra files placed in `data/` are also tested where present. | ✅ PASS (all 5 sample files) |
+
+### 3.6 Sample files through the pipeline: `tests/test_samples.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 38 | `test_samples_ingest` | All 5 sample files ingest without failure and all are quarantined (XA/US without a burned-in flag). They resolve to 4 patients and 4 series (3 XA, 1 US), because two files share a patient and series. | ✅ PASS |
+| 39 | `test_samples_no_leak` | No patient name, ID, birth date, accession, institution or original UID from the samples appears in the de-identified files or the database | ✅ PASS |
+
 ---
+
+### 3.7 Fraud-detection generator: `frauddetect/tests/test_fraudgen.py` (run separately)
+
+Not collected by the root `pytest` run, because `testpaths = ["tests"]`. Run with
+`python -m pytest frauddetect/tests`. Result: **33 passed**.
+
+| Test | What it proves |
+|---|---|
+| `test_checksums_match_published_examples`, `test_mrz_matches_icao_specimen` | Check-digit algorithms and the MRZ builder reproduce published reference values (ICAO 9303 specimen, IBAN, ABA, ISO 6346, DNI) |
+| `test_mrz_icao_transliteration` | Ü→UE, ß→SS etc. in the MRZ |
+| `test_genuine_identity_documents_pass_all_rules` | For every region, 4 people: MRZ check digits, Emirates ID Luhn + birth year, Aadhaar Verhoeff, PAN structure, CNIC gender digit, UK licence DOB encoding, Medicare, DNI letter, BD NID formats, AAMVA barcode DOB, CNIC inside Pakistani passport MRZ, issue < expiry, not expired |
+| `test_rendered_id_has_searchable_text_and_specimen` | The PDF text layer holds the real ID number and the Arabic name, every page says SPECIMEN, and fonts are subset |
+| `test_genuine_statements_reconcile` (×11 banks) | Valid IBAN/ABA/IFSC/BSB/NZ formats, running balance adds up, every transaction is inside the period, MT940 and CAMT.053 closing balances match |
+| `test_genuine_shipment_is_consistent` (×4 lanes) | Container check digits, invoice within the L/C amount + tolerance, date order L/C issue < invoice ≤ on board ≤ latest shipment < expiry, weights match |
+| `test_planted_*_defects_present`, `test_edge_cases_render_as_intended` | For a sample of 13 cases, the planted defect is really in the output (bad check digit, broken balance, Photoshop producer + incremental save, diverted account, `04/05/2026` printed in both statements, MRZ `MUELLER<LUEDENSCHEIDT`) |
+| `test_mrz_retouch_keeps_check_digits_valid`, `test_example_spec_produces_every_case`, `test_custom_mutations_land`, `test_bad_spec_names_the_problem` | Custom cases: MRZ edits keep check digits valid; all 10 cases in `examples/custom_cases_uae.json` are generated with their planted defects (expired + bad MRZ digit, age 16, cross-document DOB, inflated balance, MOHAMED in MRZ, Aadhaar/PAN failures); a bad spec gives an error naming the case, document and mutation |
 
 ## 4. Manual / end-to-end checks
 
@@ -159,7 +294,33 @@ Nine public sample files were ingested together:
 
 ✅ 0 failures, and every quarantine decision was correct.
 
-### 4.4 Workshop scripts
+### 4.4 Sample DICOM files (`tests/data/dicom/`)
+
+The repo owner supplied five DICOM files for testing. They carry patient
+identity fields and have no de-identification markers, so they were first
+**treated as potentially real data**: processed outside the repo, with only
+counts and outcomes recorded. A check of the patient-name fields, which
+reported only whether a marker was present and never the value, showed every
+file carries the **"Rubo" demo placeholder**. They are the public **Rubo Medical
+demo sample files**, and the repo owner then committed them under
+`tests/data/dicom/` as permanent test data. Any other DICOM file stays
+git-ignored (`*.dcm` / `*.DCM`).
+
+| File | Modality | Compression | Frames | Outcome | Private tags removed |
+|---|---|---|---|---|---|
+| `0002.DCM` | XA (angiography) | JPEG Baseline | 96 | QUARANTINED | 14 |
+| `0003.DCM` | XA | JPEG Baseline | 17 | QUARANTINED | 14 |
+| `0004.DCM` | XA | JPEG Baseline | 17 | QUARANTINED | 14 |
+| `0009.DCM` | XA | JPEG Baseline | 137 | QUARANTINED | 13 |
+| `0020.DCM` | US multi-frame | RLE Lossless | 11 | QUARANTINED | 0 |
+
+- ✅ **All five quarantined, which is correct.** `BurnedInAnnotation` is missing, and XA and US images very often have identifying text burned into the pixels. They need OCR review (Phase 1) before release.
+- ✅ Header de-identification completed on every file: identity removed, private tags gone, every person name emptied, dates shifted, UIDs remapped. Multi-frame pixel data stayed intact in both compressed formats.
+- ✅ Linkage: the 5 files resolved to **4 patients** (two files share one token).
+- ✅ Leak scan: **25** identity values collected from the originals, **0** found in the output files or the database.
+- ✅ **Pixel decoding** (`dicom-deid inspect`, `loader.iter_frames`): all **278 frames** decode. That is 96 + 17 + 17 + 137 frames of 512×512 8-bit JPEG Baseline angiography, and 11 frames of 430×600 RLE palette-colour ultrasound, which is expanded to RGB for PNG preview.
+
+### 4.5 Workshop scripts
 
 | Check | Result |
 |---|---|
@@ -168,12 +329,12 @@ Nine public sample files were ingested together:
 | `generate_referral_letters.py` + `deidentify_referral_letters.py` | ✅ All 10 letters: every address, phone, date, DOB, patient name and physician redacted. Only clinic names remain (by design). |
 | `deidentify_with_comprehend_medical.py --help` | ✅ Parses. The real AWS call was **not** executed (no credentials, and synthetic-only policy). |
 
-### 4.5 Repository hygiene before push
+### 4.6 Repository hygiene before push
 
 | Check | Result |
 |---|---|
 | `.env` (holds the GitHub token) is git-ignored | ✅ Confirmed with `git check-ignore` |
-| `venv/`, `data/dicom/`, `data/db/`, `.claude/`, `*.zip` not staged | ✅ 0 matches in the staged file list |
+| `venv/`, `data/dicom/`, `data/db/`, `*.zip`, `*.dcm` not staged | ✅ 0 matches in the staged file list |
 | Staged content scanned for the token pattern `github_pat_` | ✅ 0 matches (checked again immediately before push) |
 
 ---
@@ -191,7 +352,7 @@ Nine public sample files were ingested together:
 | 5 | `patient_age` was computed from the year only | Off by up to one year | Proper age at the study date |
 | 6 | Each of the 120 CSV records had a unique patient | Patient linkage, the main point of the token, was never demonstrated | About 35% repeat patients (76 patients / 120 studies) |
 | 7 | Token was SHA-256 with a hard-coded public salt | MRNs could be brute-forced back from tokens | HMAC-SHA256 with the secret `DEID_SECRET` |
-| 8 | README described a Path B (letters) de-identification step that did not exist | Documentation did not match the code | Added `scripts/deidentify_referral_letters.py` |
+| 8 | README described a referral-letter (Demo 2) de-identification step that did not exist | Documentation did not match the code | Added `scripts/deidentify_referral_letters.py` |
 
 ### 5.2 In the new code (caught by the tests before release)
 
@@ -201,6 +362,9 @@ Nine public sample files were ingested together:
 | 10 | The verifier only matched short identifiers (< 5 chars) as a whole value, so "Doe" in "Reviewed with Jane Doe" was missed. This matters for common short names such as *Ali*, *Khan*, *Syed* and *Lee*. | Test 9 **failed** | Short identifiers now match as whole words anywhere in a value (fails safe) |
 | 11 | The street-address regex missed military addresses (`PSC 5116, Box 3726, APO AP 44084`) | Manual review of letter output (referral_008) | Line-level rule: any line ending in `ST 12345` |
 | 12 | The quarantine reason said "modality NM" when the actual trigger was the Secondary Capture SOP class | Vendor-file run (4.3) | The message now names the real trigger |
+| 13 | PNG previews of the ultrasound sample (`0020.DCM`, PALETTE COLOR) would have been palette indices rather than colours | Manual decode of the sample files before writing the tests | `to_uint8` expands palette colour through the file's colour table; the preview is RGB |
+| 14 | The documented vetting commands pointed the leak scan at `data/`, which also holds the pipeline's own output (false leaks). DICOM files without an extension, which are common, were not covered by the `*.dcm` ignore rule. | Review of the new README instructions | Downloads go to `data/incoming/`, which is git-ignored as a whole folder; the commands use it explicitly |
+| 15 | *(test bug, not a code bug)* `test_samples_ingest` expected 4 XA series, but two sample files share one series | The test **failed** on first run | Expectation corrected to 3 XA + 1 US series, matching the earlier manual run (4 patients, 4 series) |
 
 ---
 
@@ -214,3 +378,5 @@ Nine public sample files were ingested together:
 | **Real clinical DICOM / HL7** | Out of scope for this public repo | Phase 1, controlled environment only |
 | **Performance at scale** | Largest run was 28 files | Load test in Phase 1 (thousands of studies) |
 | **Linux / macOS** | Only run on Windows | CI (GitHub Actions) matrix in Phase 1 |
+| **JPEG Extended / JPEG Lossless / JPEG-LS decoding** | No decoder plugin installed; such files are reported as *not decodable* (test 29) rather than failing | Add `pylibjpeg` plugins in Phase 1 |
+| **Path B (AWS-managed)** | No AWS account was used; the guide is documentation only | Infrastructure code next, then deployment tests in a sandbox account with synthetic data |
