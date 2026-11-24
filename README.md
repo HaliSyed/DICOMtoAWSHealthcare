@@ -7,7 +7,7 @@ reports, referral letters), whether typed, PDF or scanned. Every source is linke
 per patient through the same keyed pseudonym, so downstream analytics (such as
 biological-age estimation, in a separate repository) receive one clean, de-identified
 record per person and never see identifying data. Later phases add FHIR
-interoperability, UAE PDPL-aligned controls and the full AWS imaging AI pipeline.
+interoperability, UAE PDPL, GDPR and HIPAA-aligned controls and the full AWS imaging AI pipeline.
 
 This repo started as the companion code for the **AWS Community Day UAE 2026**
 session *"From DICOM to Diagnosis: Building a Medical Imaging AI Pipeline on AWS"*.
@@ -63,7 +63,7 @@ de-identification without anyone downstream holding a name.
 - [Getting DICOM test data (public sources)](#getting-dicom-test-data-public-sources)
 - [Workshop demos (Demo 1 / Demo 2)](#workshop-demos-demo-1--demo-2)
 - [Roadmap](#roadmap)
-- [UAE compliance notes](#uae-compliance-notes)
+- [Compliance notes (UAE PDPL, GDPR, HIPAA)](#compliance-notes)
 - [Known limitations](#known-limitations-phase-0)
 - [Repository layout](#repository-layout)
 
@@ -438,9 +438,10 @@ Design choices worth pointing out live:
 **Platform hardening**
 - [ ] PostgreSQL + Alembic migrations; least-privilege DB roles; encryption at rest
 - [ ] `DEID_SECRET` in AWS Secrets Manager / KMS (or Vault), with key rotation and versioning recorded per record
-- [ ] Amazon Comprehend Medical for free text (check region and data-residency constraints first, see [compliance notes](#uae-compliance-notes))
+- [ ] Amazon Comprehend Medical for free text (check region and data-residency constraints first, see [compliance notes](#compliance-notes))
 - [ ] Re-identification risk assessment (k-anonymity over quasi-identifiers such as age band, sex, modality, institution and dates)
 - [ ] Full PS3.15 profile options (Clean Descriptors, Retain Device Identity, etc.) as explicit configuration
+- [ ] HIPAA Safe Harbor export mode: dates reduced to year only, keyed tokens replaced by random study codes (see [compliance notes](#us-hipaa))
 
 **Governance (before any real data arrives)**
 - [ ] Data sharing agreement with the data provider; ethics/research approval where applicable (DoH Abu Dhabi / DHA / MOHAP)
@@ -496,10 +497,19 @@ available.
 
 ---
 
-## UAE compliance notes
+## Compliance notes
 
-> Architecture guidance, not legal advice. Confirm with counsel and your
-> regulator (MOHAP, DoH Abu Dhabi, DHA) before handling real data.
+> Architecture guidance, not legal advice. Confirm with counsel and the relevant
+> regulator (MOHAP, DoH Abu Dhabi, DHA; an EU/UK supervisory authority; HHS OCR)
+> before handling real data. "Aligned" means the design follows the principles
+> below; it is not a certification or a conformance claim.
+
+The engine is built to the strictest common denominator of three regimes:
+UAE law (primary deployment), the EU/UK GDPR and the US HIPAA Privacy and
+Security Rules. Where they differ, the gaps are listed openly rather than
+papered over.
+
+### UAE: PDPL and health-sector law
 
 - **Several laws apply at once.** The UAE PDPL (Federal Decree-Law No. 45 of 2021) excludes health personal data that has its own governing legislation. For health data the primary law is **Federal Law No. 2 of 2019 on the Use of ICT in Health Fields**, plus emirate-level rules (e.g. DoH Abu Dhabi's **ADHICS** standard, and DHA policies in Dubai). The design therefore meets the PDPL principles listed above **and** the health-sector rules, notably:
   - **Data localisation.** Health data is stored and processed inside the UAE unless an exception applies. This decides which AWS regions and services can be used (e.g. whether Comprehend Medical or HealthLake is an option at all).
@@ -507,6 +517,47 @@ available.
   - If the system serves other jurisdictions (e.g. KSA's PDPL), their rules layer on top.
 - **Pseudonymised is not anonymised.** Our output is linkable (same token per patient) and we hold the key, so it is still personal data under the law. The de-identified database needs the same protection as the source, just with lower risk. Truly anonymous exports (no key, k-anonymity checked) are a separate, later deliverable.
 - **Synthetic data only in this repo**, in every phase.
+
+### EU / UK GDPR
+
+Applies when the data subjects are in the EU or UK, or the controller or
+processor is established there.
+
+- **Health data is special category data (Art. 9).** Processing needs both an Art. 6 lawful basis and an Art. 9(2) condition: typically (h) provision of care, (j) scientific research with Art. 89(1) safeguards, or (a) explicit consent. The basis is recorded per dataset and checked before release (FHIR `Consent`, Phase 2).
+- **Pseudonymised data is still personal data (Art. 4(5), Recital 26).** Our HMAC tokens and date shifts are pseudonymisation, not anonymisation. Art. 4(5) requires the "additional information" to be kept separately: here, `DEID_SECRET` lives in a secrets manager under separate access control, never with the de-identified data.
+- **Data protection by design and by default (Art. 25).** Minimisation is structural: PHI columns do not exist in the schema; every source is de-identified before it is stored or exported.
+- **DPIA (Art. 35)** before any real data, since this is large-scale processing of health data. **Records of processing (Art. 30)** are kept alongside the system.
+- **Processors (Art. 28).** A data processing agreement with every processor, including AWS for Path B.
+- **Security and breaches (Arts. 32–34).** Encryption in transit and at rest, access control, audit logs; supervisory authority notified within 72 hours of becoming aware of a breach.
+- **Data subject rights (Arts. 15–22).** Access, rectification, erasure, restriction and objection are resolved through the key-holder, who alone can map a person to a token.
+- **Automated decisions (Art. 22).** Downstream outputs such as a biological-age estimate must not be the sole basis for decisions with legal or similarly significant effects on a person without the Art. 22 safeguards.
+- **International transfers (Chapter V).** Moving data between the EU/UK and the UAE needs a transfer mechanism (e.g. Standard Contractual Clauses plus a transfer risk assessment) unless an adequacy decision covers the destination.
+
+### US HIPAA
+
+Applies when the data comes from a covered entity (provider, health plan,
+clearinghouse) or its business associate.
+
+- **De-identification method (45 CFR 164.514(b)).** HIPAA offers two routes, and the current output fits neither fully on its own:
+  - **Safe Harbor** removes 18 identifiers. We already remove names, addresses, phone numbers, IDs, device and UID identifiers, and collapse ages of 90 and over into `90+`. **Gap:** Safe Harbor requires dates reduced to the year only, whereas we shift full dates by a per-patient offset to keep intervals. A year-only output mode is planned for Safe Harbor exports.
+  - **Expert Determination** lets a qualified statistician certify that the re-identification risk is very small. This is the route that fits shifted dates and linkable tokens; the k-anonymity risk assessment planned for Phase 1 feeds it.
+- **Re-identification codes (164.514(c)).** HIPAA allows a code for re-linking only if it is not derived from information about the individual. Our token is an HMAC of the patient ID, so under Safe Harbor it must be treated as an identifier and replaced by a random study code (with the mapping held by the key-holder) for any HIPAA de-identified release. Under Expert Determination the keyed token is assessed as part of the risk analysis.
+- **Limited Data Set (164.514(e)).** For research that needs real or shifted dates, a limited data set under a data use agreement is the alternative to full de-identification.
+- **Images.** Full-face photographs and comparable images are a Safe Harbor identifier. Burned-in text is quarantined today; defacing of head CT/MR arrives in Phase 1.
+- **Business Associate Agreements.** A BAA with every vendor that handles PHI, including AWS, and only HIPAA-eligible AWS services in Path B.
+- **Security Rule (45 CFR 164.308–164.316).** Risk analysis, access control, audit controls, integrity and transmission security map onto the controls listed for the UAE and GDPR above.
+
+### How the regimes map onto the design
+
+| Control in this repo | UAE | GDPR | HIPAA |
+|---|---|---|---|
+| PHI removed from schema; keyed tokens | Data minimisation | Art. 25, Art. 4(5) | Safe Harbor identifiers (token: see 164.514(c) note) |
+| Per-patient date shift | Pseudonymisation | Pseudonymisation | Expert Determination or Limited Data Set; year-only mode for Safe Harbor |
+| Age bands with `90+` | Minimisation | Minimisation | Safe Harbor age rule |
+| Independent verifier + quarantine | Accountability | Art. 5(2), Art. 32 | Security Rule, "no actual knowledge" |
+| Audit trail (`deid_audit_events`) | Accountability | Art. 30, Art. 5(2) | Audit controls |
+| Key held separately (`DEID_SECRET`) | Security | Art. 4(5) | 164.514(c) |
+| Residency in the UAE | Required for health data | Chapter V transfer rules | No residency rule; BAA required |
 
 ---
 
