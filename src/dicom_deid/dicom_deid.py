@@ -151,9 +151,26 @@ def _age(ds: Dataset) -> int | None:
     )
     if birth and ref:
         return age_at(birth, ref)
-    age_str = str(ds.get("PatientAge", "") or "")
-    if len(age_str) == 4 and age_str[:3].isdigit():
-        return int(age_str[:3]) if age_str[3] == "Y" else 0
+    return _age_from_as(str(ds.get("PatientAge", "") or ""))
+
+
+def _age_from_as(age_str: str) -> int | None:
+    """Whole years from a DICOM Age String (nnnD/W/M/Y).
+
+    Infant ages are usually written in days, weeks or months; reading
+    them as 0 would also put e.g. "120M" (10 years) in the wrong age band.
+    """
+    if len(age_str) != 4 or not age_str[:3].isdigit():
+        return None
+    n, unit = int(age_str[:3]), age_str[3]
+    if unit == "Y":
+        return n
+    if unit == "M":
+        return n // 12
+    if unit == "W":
+        return int(n * 7 / 365.25)
+    if unit == "D":
+        return int(n / 365.25)
     return None
 
 
