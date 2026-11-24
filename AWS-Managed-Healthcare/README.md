@@ -11,7 +11,7 @@ Medical, Amazon SageMaker and Amazon Bedrock.
 > [!IMPORTANT]
 > **Data residency comes first.** UAE health data must be stored and processed inside
 > the UAE unless an exception applies (Federal Law No. 2 of 2019; see the main
-> [README](../README.md#uae-compliance-notes)). Several services below may **not** be
+> [README](../README.md#compliance-notes)). Several services below may **not** be
 > offered in the UAE region (`me-central-1`). Check the
 > [AWS Regional Services List](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/)
 > for **each** service before you design. Until residency is cleared with your
