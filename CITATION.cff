@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "DICOMtoAWSHealthcare: a verifiable DICOM de-identification pipeline for research imaging data"
+type: software
+authors:
+  - family-names: Ali
+    given-names: Syed Haider
+    orcid: "https://orcid.org/0000-0002-0271-4811"
+    affiliation: Aitropolis Technologies Ltd
+    email: syedhaider79@gmail.com
+repository-code: "https://github.com/HaliSyed/DICOMtoAWSHealthcare"
+license: MIT
+version: 0.1.0
+keywords:
+  - DICOM
+  - de-identification
+  - pseudonymisation
+  - medical imaging
+  - privacy
