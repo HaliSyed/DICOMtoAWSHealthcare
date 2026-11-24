@@ -1,5 +1,7 @@
 # DICOMtoAWSHealthcare
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24508517.svg)](https://doi.org/10.5281/zenodo.24508517)
+
 **A de-identifying ingestion engine for clinical data: read → extract → de-identify → store.**
 DICOM imaging is the primary source and works today. The engine is being extended to
 HL7 v2 messages, **prescriptions**, and **clinical reports** (lab, radiology and discharge
@@ -607,6 +609,14 @@ DICOMtoAWSHealthcare/
     └── referral_letters/       10 synthetic referral letters
     # generated locally and git-ignored: data/dicom/, data/db/, data/referral_letters_deid/
 ```
+
+## How to cite
+
+If you use this software, please cite it. GitHub's **"Cite this repository"** button
+(from [CITATION.cff](CITATION.cff)) gives APA and BibTeX formats.
+
+- **All versions** (concept DOI): [10.5281/zenodo.24508517](https://doi.org/10.5281/zenodo.24508517), always resolves to the latest release
+- **v0.1.0** (version DOI): [10.5281/zenodo.24508518](https://doi.org/10.5281/zenodo.24508518), cite this when you need the exact version used
 
 ## License
 

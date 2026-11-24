@@ -11,6 +11,15 @@ authors:
 repository-code: "https://github.com/HaliSyed/DICOMtoAWSHealthcare"
 license: MIT
 version: 0.1.0
+date-released: 2026-11-24
+doi: 10.5281/zenodo.24508517
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24508517
+    description: "Concept DOI: all versions, resolves to the latest release"
+  - type: doi
+    value: 10.5281/zenodo.24508518
+    description: "Version DOI: v0.1.0"
 keywords:
   - DICOM
   - de-identification
