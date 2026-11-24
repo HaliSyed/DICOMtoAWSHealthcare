@@ -1,5 +1,6 @@
 # DICOMtoAWSHealthcare
 
+[![tests](https://github.com/HaliSyed/DICOMtoAWSHealthcare/actions/workflows/tests.yml/badge.svg)](https://github.com/HaliSyed/DICOMtoAWSHealthcare/actions/workflows/tests.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24508517.svg)](https://doi.org/10.5281/zenodo.24508517)
 
 **A de-identifying ingestion engine for clinical data: read → extract → de-identify → store.**
@@ -75,7 +76,7 @@ de-identification without anyone downstream holding a name.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 39 automated tests passing ([TESTING.md](TESTING.md)) |
+| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 50 automated tests passing ([TESTING.md](TESTING.md)) |
 | **1** | Real DICOM images + HL7 v2 messages; prescriptions and clinical reports (text, PDF, OCR); PostgreSQL; production hardening | 🔜 Next |
 | **2** | FHIR R4 layer (ImagingStudy, Patient, DiagnosticReport…), with PDPL-aligned controls | 📐 Designed, see roadmap |
 | **3** | AWS pipeline: S3 → HealthImaging → inference → report generation (**Path B**) | 📐 Setup guide written: [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md); IaC next |
@@ -84,7 +85,7 @@ de-identification without anyone downstream holding a name.
 
 ## Quick start
 
-Requires **Python 3.10+**. No AWS account, network or database server needed.
+Requires **Python 3.10+** (the pinned environment in `requirements-lock.txt` and CI use 3.11 and 3.12). No AWS account, network or database server needed.
 
 ```bash
 git clone https://github.com/HaliSyed/DICOMtoAWSHealthcare.git
@@ -149,7 +150,7 @@ To run it on your own (synthetic or public) DICOM folder, use
 ### Run the tests
 
 ```bash
-pytest            # 39 tests, about 10 seconds, fully offline
+pytest            # 50 tests, about 10 seconds, fully offline
 ```
 
 | Test file | Tests | What it covers |
@@ -408,7 +409,7 @@ Design choices worth pointing out live:
 - [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Demo 1 (CSV) and Demo 2 (letters) scripts, now reproducible
-- [x] 39 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
+- [x] 50 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
 
 ### Phase 1: Real data: DICOM images, HL7 messages, prescriptions and reports
 
@@ -585,6 +586,8 @@ DICOMtoAWSHealthcare/
 ├── LICENSE                     MIT
 ├── pyproject.toml              package definition (dicom-deid CLI)
 ├── requirements.txt            pip install -r requirements.txt
+├── requirements-lock.txt       exact dependency versions (pip constraints file)
+├── .github/workflows/tests.yml CI: tests + leak scan on Linux, macOS, Windows
 ├── .env.example                configuration template (.env itself is git-ignored)
 ├── src/dicom_deid/
 │   ├── cli.py                  dicom-deid synth | ingest | report | inspect
