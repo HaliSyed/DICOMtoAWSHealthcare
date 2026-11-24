@@ -1,0 +1,30 @@
+{
+  "title": "DICOMtoAWSHealthcare: a verifiable DICOM de-identification pipeline for research imaging data",
+  "upload_type": "software",
+  "description": "<p>Python pipeline that reads DICOM files (including compressed multi-frame), de-identifies them with a subset of the DICOM PS3.15 Basic Application Level Confidentiality Profile, keyed HMAC-SHA256 pseudonymisation, per-patient date shifting and deterministic UID remapping, independently re-scans every output for residual identifiers, quarantines files with burned-in text risk, and records every decision in a relational database with an audit log.</p><p>All bundled data are synthetic or public. This release is not clinically validated and makes no claim of regulatory compliance.</p>",
+  "creators": [
+    {
+      "name": "Ali, Syed Haider",
+      "affiliation": "Aitropolis Technologies Ltd",
+      "orcid": "0000-0002-0271-4811"
+    }
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "keywords": [
+    "DICOM",
+    "de-identification",
+    "pseudonymisation",
+    "medical imaging",
+    "privacy",
+    "health data governance",
+    "pydicom"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/HaliSyed/DICOMtoAWSHealthcare",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}
