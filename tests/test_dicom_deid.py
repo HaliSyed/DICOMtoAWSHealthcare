@@ -114,3 +114,26 @@ def test_real_vendor_files_come_out_clean(name):
     ds = pydicom.dcmread(path)
     result = deidentify(ds, TEST_SECRET)
     assert find_residual_phi(result.dataset, result.original_identifiers, result.patient_token) == []
+
+
+@pytest.mark.parametrize("age_str, years", [
+    ("045Y", 45),
+    ("005M", 0),    # 5 months
+    ("120M", 10),   # 10 years written in months: must not collapse to 0
+    ("052W", 0),    # 364 days: just under a year
+    ("053W", 1),    # 371 days
+    ("003W", 0),
+    ("400D", 1),    # 400 days
+    ("030D", 0),
+    ("092Y", 92),
+    ("45Y", None),  # malformed: DICOM AS is always 3 digits + unit
+    ("045X", None), # unknown unit
+])
+@pytest.mark.filterwarnings("ignore:Invalid value for VR AS")
+def test_patient_age_units_are_converted_to_years(age_str, years):
+    """PatientAge (VR AS) can be in days, weeks, months or years; only used when no birth date."""
+    from dicom_deid.dicom_deid import _age
+
+    ds = Dataset()
+    ds.PatientAge = age_str
+    assert _age(ds) == years

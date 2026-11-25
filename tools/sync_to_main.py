@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-sync_to_main.py -- push the current branch, open a PR into main, merge it.
+sync_to_main.py -- push the current branch, open a PR into main, request review.
 
 Steps (each one stops the run on failure):
   1. Refuse to run on main or with uncommitted changes.
@@ -11,8 +11,12 @@ Steps (each one stops the run on failure):
      being pushed.
   4. Push the branch (token used for this one command only -- never written
      to .git/config, the remote URL, or a credential store).
-  5. Open a pull request into main (or reuse an open one), then merge it.
-  6. Delete the remote branch and fast-forward the local branch to main.
+  5. Open a pull request into main (or reuse an open one) and request a
+     review from REVIEWERS. Then stop: main is branch-protected and needs one
+     approving review, so the PR is merged on GitHub after approval.
+
+Before step 1, if main has moved on (e.g. an approved PR was merged) and the
+local branch has nothing new, the local branch is fast-forwarded to main.
 
 The token is read from GITHUB_TOKEN in the environment or in .env, and is
 never printed.
@@ -35,6 +39,7 @@ from pathlib import Path
 OWNER_REPO = "HaliSyed/DICOMtoAWSHealthcare"
 API = f"https://api.github.com/repos/{OWNER_REPO}"
 BASE = "main"
+REVIEWERS = ["razaidee"]
 TOKEN_SHAPES = re.compile(r"github_pat_[A-Za-z0-9_]{50,}|gh[pousr]_[A-Za-z0-9]{30,}")
 
 
@@ -93,6 +98,8 @@ def main() -> int:
         fail("uncommitted changes -- commit them first")
     token = read_token()
     git("fetch", "--quiet", "--prune", "origin")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", f"origin/{BASE}"]).returncode == 0:
+        git("merge", "--quiet", "--ff-only", f"origin/{BASE}")
     commits = git("rev-list", f"origin/{BASE}..HEAD").split()
     if not commits:
         print(f"Nothing to sync: {branch} has no commits that are not already in {BASE}.")
@@ -130,7 +137,7 @@ def main() -> int:
     git("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}", token=token, env=push_env)
     print(f"  Pushed '{branch}'")
 
-    # 5. PR + merge
+    # 5. PR + review request, then stop (merging needs an approving review)
     owner = OWNER_REPO.split("/")[0]
     status, open_prs = github(token, "GET", f"/pulls?head={owner}:{branch}&base={BASE}&state=open")
     if status == 200 and open_prs:
@@ -142,16 +149,11 @@ def main() -> int:
             fail(f"could not create PR ({status}): {pr.get('message')} {pr.get('errors', '')}")
     print(f"  PR #{pr['number']}: {pr['html_url']}")
 
-    status, merged = github(token, "PUT", f"/pulls/{pr['number']}/merge", {"merge_method": "merge"})
-    if status != 200:
-        fail(f"PR #{pr['number']} left open -- merge refused ({status}): {merged.get('message')}")
-    print(f"  Merged into {BASE} ({merged.get('sha', '')[:7]})")
-
-    # 6. clean up
-    github(token, "DELETE", f"/git/refs/heads/{branch}")
-    git("fetch", "--quiet", "--prune", "origin")
-    git("merge", "--quiet", "--ff-only", f"origin/{BASE}")
-    print(f"  Remote branch deleted; local '{branch}' now matches {BASE}")
+    status, reviewed = github(token, "POST", f"/pulls/{pr['number']}/requested_reviewers", {"reviewers": REVIEWERS})
+    if status not in (200, 201):
+        fail(f"PR #{pr['number']} is open, but the review request failed ({status}): {reviewed.get('message')}")
+    print(f"  Review requested from: {', '.join(REVIEWERS)}")
+    print("  Stopped here. Merge on GitHub once the PR is approved.")
     return 0
 
 

@@ -1,8 +1,8 @@
 # Testing Report: Phase 0
 
-**Date:** 2026-09-30
+**Date:** 2026-09-30 (updated 2026-11-24: PatientAge units fix, pinned dependencies, CI)
 **Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
-**Result:** ✅ **39 / 39 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **50 / 50 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from public
 sources: the sample files that ship with pydicom, and the five Rubo Medical demo
@@ -19,7 +19,7 @@ this project uses it. Anything marked *planned* is not in the code yet.
 
 | Item | Version tested | What it is | Purpose in this project |
 |---|---|---|---|
-| **OS** | Windows 10 Pro 10.0.19045 | Operating system of the test machine | The only OS tested so far. The code has no Windows-specific parts (it uses `pathlib` for all paths), but Linux/macOS still need a CI run (see [Not tested](#6-not-tested)). |
+| **OS** | Windows 10 Pro 10.0.19045 | Operating system of the test machine | The only OS tested locally. The code has no Windows-specific parts (it uses `pathlib` for all paths). A GitHub Actions matrix (Ubuntu, macOS, Windows × Python 3.11, 3.12) is configured in `.github/workflows/tests.yml`; see [Not tested](#6-not-tested) until its first run is recorded. |
 | **Python** | 3.11.9 (minimum 3.10) | The programming language and interpreter | Runs all code. 3.10+ is required because the code uses modern type hints such as `str \| None`. |
 | **SQLite** | 3.45.1 (via Python's built-in `sqlite3` module) | A file-based SQL database engine that needs no server | **The Phase 0 local database** (`data/db/deid.sqlite`). It stores patients, studies, series, instances and the audit log. It was chosen for Phase 0 because it needs no install and works offline, e.g. in a workshop room. PostgreSQL replaces it in Phase 1 without code changes. |
 
@@ -41,7 +41,7 @@ Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirem
 
 | Library | Version tested | Extra | What it is | Purpose in this project |
 |---|---|---|---|---|
-| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 24 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
+| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 50 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
 | **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
 | **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
 
@@ -50,6 +50,8 @@ Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirem
 | Tool | Version | Purpose |
 |---|---|---|
 | **pip** | 26.2.1 | Installs the package and its dependencies from `requirements.txt` |
+| **`requirements-lock.txt`** | — | A pip constraints file with the exact version of every dependency the suite was verified with (Python 3.11). `requirements.txt` applies it, so local installs and CI resolve the same versions. `pyproject.toml` keeps the looser supported ranges. |
+| **GitHub Actions** | `actions/checkout@v4`, `actions/setup-python@v5` | Continuous integration (`.github/workflows/tests.yml`): pinned install, `pytest`, then synth → ingest → leak scan, on Ubuntu, macOS and Windows with Python 3.11 and 3.12 |
 | **setuptools** | ≥ 68 (fetched automatically at build time) | Builds the `dicom_deid` package from `pyproject.toml` and creates the `dicom-deid` command |
 | **venv** | built into Python | Keeps this project's libraries in an isolated environment (`venv/`, git-ignored) |
 
@@ -83,7 +85,6 @@ ones are listed first.
 | **hl7apy** or **python-hl7** | 1 | Parse HL7 v2 messages (ADT, ORM/OMI, ORU) so they can be de-identified and linked to DICOM studies |
 | OCR (Amazon Textract / Rekognition, or Tesseract via `pytesseract` for on-premises data) on frames from `loader.iter_frames` | 1 | Find and mask burned-in text in quarantined ultrasound and screenshot images |
 | Defacing tool (e.g. `pydeface`) | 1 | Remove facial features from head CT/MR volumes |
-| **GitHub Actions** | 1 | Continuous integration: run the tests on Linux, macOS and Windows for every push |
 | **fhir.resources** | 2 | Python FHIR R4 models for building and validating `Patient`, `ImagingStudy`, `DiagnosticReport`, etc. |
 | **HAPI FHIR JPA server** (or AWS HealthLake) | 2 | The FHIR server itself (a Java service running on PostgreSQL), subject to UAE data-residency checks |
 | **pgvector** | Later | Vector similarity search inside PostgreSQL, only once the AI phase produces image embeddings |
@@ -130,7 +131,7 @@ and redistributable, and its source is recorded in section 4.4.
 ## 3. Automated tests (pytest)
 
 ```text
-39 passed, 1 warning
+50 passed, 1 warning
 ```
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
@@ -158,6 +159,7 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 12 | `test_real_vendor_files_come_out_clean[MR_small.dcm]` | Real vendor MR | ✅ PASS |
 | 13 | `test_real_vendor_files_come_out_clean[JPEG2000.dcm]` | Compressed pixel data (JPEG 2000) is handled without decoding | ✅ PASS |
 | 14 | `test_real_vendor_files_come_out_clean[rtplan.dcm]` | Non-image object (radiotherapy plan) | ✅ PASS |
+| 40–50 | `test_patient_age_units_are_converted_to_years[…]` (11 cases) | When there is no birth date, `PatientAge` is converted to whole years from every DICOM unit: `045Y`→45, `092Y`→92, `005M`→0, `120M`→10, `003W`→0, `052W`→0 (364 days), `053W`→1, `030D`→0, `400D`→1. Malformed values (`45Y`, `045X`) give *unknown*, not 0. | ✅ PASS |
 
 ### 3.3 Pipeline and database: `tests/test_pipeline.py`
 
@@ -338,6 +340,7 @@ git-ignored (`*.dcm` / `*.DCM`).
 | 13 | PNG previews of the ultrasound sample (`0020.DCM`, PALETTE COLOR) would have been palette indices rather than colours | Manual decode of the sample files before writing the tests | `to_uint8` expands palette colour through the file's colour table; the preview is RGB |
 | 14 | The documented vetting commands pointed the leak scan at `data/`, which also holds the pipeline's own output (false leaks). DICOM files without an extension, which are common, were not covered by the `*.dcm` ignore rule. | Review of the new README instructions | Downloads go to `data/incoming/`, which is git-ignored as a whole folder; the commands use it explicitly |
 | 15 | *(test bug, not a code bug)* `test_samples_ingest` expected 4 XA series, but two sample files share one series | The test **failed** on first run | Expectation corrected to 3 XA + 1 US series, matching the earlier manual run (4 patients, 4 series) |
+| 16 | `PatientAge` in months, weeks or days (`nnnM/W/D`) was read as age 0, so `120M` (10 years) landed in band `0-9`; malformed values also became 0 instead of *unknown*. Only affects files with no birth date. | Code review for the research paper | Converted to whole years per unit; tests 40–50 |
 
 ---
 
@@ -350,6 +353,6 @@ git-ignored (`*.dcm` / `*.DCM`).
 | **Burned-in pixel text** | Phase 0 does not inspect pixels by design; risky images are quarantined instead | Phase 1 OCR + masking |
 | **Real clinical DICOM / HL7** | Out of scope for this public repo | Phase 1, controlled environment only |
 | **Performance at scale** | Largest run was 28 files | Load test in Phase 1 (thousands of studies) |
-| **Linux / macOS** | Only run on Windows | CI (GitHub Actions) matrix in Phase 1 |
+| **Linux / macOS** | Only run locally on Windows | CI workflow added (Ubuntu, macOS, Windows × Python 3.11, 3.12); record the first green run here |
 | **JPEG Extended / JPEG Lossless / JPEG-LS decoding** | No decoder plugin installed; such files are reported as *not decodable* (test 29) rather than failing | Add `pylibjpeg` plugins in Phase 1 |
 | **Path B (AWS-managed)** | No AWS account was used; the guide is documentation only | Infrastructure code next, then deployment tests in a sandbox account with synthetic data |
