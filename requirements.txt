@@ -1,5 +1,5 @@
-# Installs the dicom_deid package (editable) plus AWS and test extras,
+# Installs the dicom_deid package (editable) plus AWS, test and experiment extras,
 # with every dependency pinned by requirements-lock.txt.
 # For PostgreSQL instead of SQLite, also: pip install -e ".[postgres]"
 -c requirements-lock.txt
--e .[aws,dev]
+-e .[aws,dev,experiments]

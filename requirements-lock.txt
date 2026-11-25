@@ -15,6 +15,7 @@ numpy==2.4.6
 packaging==26.3
 pillow==12.3.0
 pluggy==1.6.0
+psutil==7.2.2
 pydicom==3.0.2
 Pygments==2.21.0
 pytest==9.1.1

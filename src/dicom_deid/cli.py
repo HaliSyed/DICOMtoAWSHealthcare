@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from .db import make_engine
+from .dicom_deid import PROFILES
 from .pipeline import db_report, ingest
 from .synthetic import generate
 
@@ -30,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--src", type=Path, default=Path("data/dicom/raw"))
     p.add_argument("--out", type=Path, default=Path("data/dicom/deid"))
     p.add_argument("--quarantine", type=Path, default=Path("data/dicom/quarantine"))
+    p.add_argument("--profile", choices=PROFILES, default="basic",
+                   help="basic (default): age bands only. utility: also keeps exact age, size and weight")
 
     sub.add_parser("report", help="summarise the database contents")
 
@@ -55,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest":
         if not args.src.exists():
             parser.error(f"source not found: {args.src} (run 'dicom-deid synth' first?)")
-        summary = ingest(args.src, args.out, args.quarantine, engine)
+        summary = ingest(args.src, args.out, args.quarantine, engine, profile=args.profile)
         print(json.dumps(summary.as_dict(), indent=2))
         print(f"Released -> {args.out}   Held for review -> {args.quarantine}   DB -> {engine.url}")
         return 1 if summary.failed else 0
