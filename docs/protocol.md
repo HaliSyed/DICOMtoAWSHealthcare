@@ -1,0 +1,200 @@
+# Experimental protocol
+
+**Status:** fixed before any experiment is run. Committed to the public
+repository so the commit timestamp records the plan ahead of the results.
+Any later change is made in a new commit, listed under
+[Deviations](#deviations-from-this-protocol), and reported in the paper.
+
+**Software under test:** this repository. Every result file records the
+commit hash it was produced from (see [results_schema.md](results_schema.md)).
+The study freeze is released as v1.0.0 with its own Zenodo DOI.
+
+---
+
+## 1. Aim
+
+Measure how well the pipeline removes identifying metadata from DICOM files,
+how much the independent verifier adds on top of the de-identification
+rules, and what the privacy safeguards cost in research utility.
+
+This is a software evaluation. It does not test clinical outcomes, and no
+result will be presented as proof of anonymity or of regulatory compliance.
+
+## 2. Data
+
+| Dataset | Used in | Notes |
+|---|---|---|
+| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Validation set: 216 patients. Test set: 322 patients. In total 538 patients, 605 studies and 53,581 instances (as described in Rutherford et al., arXiv:2508.01889). Collection version / DOI: [RECORD FROM TCIA]. Access date: [RECORD]. Licence / data usage agreement: [RECORD]. Scoring script source and version: [RECORD]. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
+| **Synthetic cohort** (part of this study, built by `experiments/cohort.py`; `dicom-deid synth` is not used): 100 synthetic patients with 3 to 5 studies each, including at least 20 children under 2 years at their first study and at least 5 patients over 90, generated with seed `20261125` | E3, E7 | Generated, never downloaded; the seed and generator commit are recorded. |
+| **Seeded-identifier set**: 200 planted synthetic identifiers in at least 20 synthetic files, seed `20261125` | E2(b) | See E2(b). |
+| **Attribute list** of everything the pipeline removes or changes | E5 | Produced from the de-identification rules at the frozen commit. |
+
+No real patient data is used in any experiment.
+
+### 2.1 Tuning and test discipline
+
+- De-identification and verifier rules, and the tuned comparator
+  configuration (E1), may be developed **only** on the MIDI-B **validation**
+  set.
+- The MIDI-B **test** set is run **once**, at the frozen commit, after all
+  development has stopped. If that run fails for a technical reason (crash, not a
+  score), the fix and the re-run are reported as a deviation.
+- No rule is added, removed or changed after the test-set results are seen.
+
+## 3. Experiments
+
+**No success thresholds are set.** Each experiment instead pre-specifies its
+primary metric, and the paper reports it whatever its value:
+
+| Experiment | Primary metric |
+|---|---|
+| E1 | Pass rate per MIDI-B category (and overall) on the test set |
+| E2(a) | Share of E1 failures caught by quarantine |
+| E2(b) | Verifier sensitivity per planting location |
+| E3 | Linkage, collision and interval checks (expected 100% / 0 / 0 days) |
+| E4 | Quarantine rate per modality and per reason |
+| E5 | Cohen's kappa between the two raters |
+| E6 | Files per second (median of 5 runs) |
+| E7 | Age error and share of unique records, per profile |
+
+Unless stated otherwise, proportions are reported with counts, denominators
+and **95% Wilson score confidence intervals**. Files from one patient are not
+independent, so file-level results are also given per patient where the
+data allows (cluster bootstrap by patient, 2,000 resamples, as a sensitivity
+analysis).
+
+### E1: Metadata de-identification on MIDI (headline result)
+
+- **Question.** How well does the pipeline remove patient data on a public
+  benchmark others also use?
+- **Method.** Run the pipeline (basic profile) on the MIDI test set. Score the
+  output with MIDI's official scoring script against the answer key.
+- **Metrics.** Pass/fail rate per MIDI category and overall, as produced by
+  the scoring script, with 95% CIs.
+- **Comparison.** pydicom's `deid` package on the same files, scored with
+  the same script, run twice: once with its default recipe, and once with a
+  recipe tuned on the validation set only. Its version and both recipes are
+  recorded. RSNA CTP is added only if time allows, under the same rules, and
+  reported as a deviation if added.
+- **Primary metric.** Per-category pass rate with 95% CIs. No threshold.
+
+### E2: Does the verifier catch what the rules miss? (main contribution)
+
+- **Question.** When the de-identification rules miss an identifier, does the
+  independent verifier stop the file from being released?
+- **E2(a), on MIDI.** For every file that E1 scores as still leaking, check
+  whether the pipeline quarantined it.
+  Primary metric: share of leaking files that were quarantined, with 95% CI.
+  These are the mistakes that never leave the pipeline.
+- **E2(b), seeded identifiers.** Plant 50 synthetic identifiers in each of 4
+  locations, 200 in total, spread over at least 20 synthetic files (seed
+  `20261125`):
+  1. top-level attributes;
+  2. nested sequences;
+  3. private tags;
+  4. free-text attributes.
+  The plants are generated from this specification, independently of the
+  de-identification and verifier rules.
+  Primary metric: verifier sensitivity per location and overall, with 95%
+  CIs. Secondary: false-positive rate on files with no plant.
+- **No success threshold.**
+
+### E3: Longitudinal linkage and time intervals
+
+- **Question.** After pseudonymisation, are a patient's scans still linked,
+  with the gaps between them unchanged?
+- **Method.** The synthetic cohort (100 patients, 3 to 5 studies each, known
+  dates), basic and utility profiles.
+- **Metrics.**
+  - Linkage: every patient keeps exactly one token (expected 100%).
+  - Collisions: no two patients share a token (expected 0).
+  - Intervals: every gap between two studies of one patient is unchanged to
+    the day (expected 100%; any non-zero error is reported with its size).
+- **Expected result.** All three expectations met; any failure is reported as a defect, not a threshold miss.
+
+### E4: Quarantine volume and reasons
+
+- **Question.** How many files are held back for review, and why?
+- **Method.** From the E1 run, count quarantined files by modality (CT, MR,
+  US, and so on) and by recorded reason (`status_reason`: burned-in text risk,
+  residual-identifier check failed).
+- **Metrics.** Quarantine rate per modality and per reason, with 95% CIs.
+  Ultrasound is reported separately because of its role in obstetrics.
+- **No success threshold.**
+
+### E5: Clinical relevance of removed attributes
+
+- **Question.** Which removed or changed details would clinicians need?
+- **Raters.** Dr. Syeda Sana Ali ([TITLE], Obstetrics and Gynaecology,
+  [HOSPITAL]) and Dr. Syeda Itrat Fatima ([TITLE], Paediatrics, [HOSPITAL]).
+- **Method.** The two raters, independently and without seeing each other's
+  ratings, rate every attribute the pipeline removes or changes:
+  *essential*, *useful* or *not needed*, with a one-line reason.
+- **Limitations, stated in the paper.** Both raters are co-authors and
+  therefore not independent of the study. Neither is a radiologist, and no
+  radiologist rated the attributes, so the ratings reflect the needs of
+  obstetric and paediatric users of imaging, not of image interpretation.
+- **Metrics.** Cohen's kappa with a 95% bootstrap CI (primary), and linearly
+  weighted kappa (secondary, because the scale is ordered). Disagreements are
+  resolved by discussion after kappa is computed; both the independent and
+  the resolved ratings are published.
+- **No success threshold.**
+
+### E6: Performance
+
+- **Question.** How fast is the pipeline?
+- **Method.** Time the full ingest on a stated machine (CPU, RAM, disk, OS,
+  Python version recorded). 5 runs after one warm-up run, on the MIDI-B
+  validation set.
+- **Metrics.** Files per second and MB per second (median and range over the
+  5 runs) and peak memory. Peak memory is the process's peak resident set size, read with `psutil` (an
+  experiment-only dependency, version recorded).
+- **No success threshold.**
+
+### E7: Age accuracy versus re-identification risk
+
+- **Question.** How wrong does a patient's age become under each
+  de-identification profile, and does keeping exact age make records easier
+  to single out?
+- **Profiles.**
+  - *basic*: 10-year age band, ages 90 and over collapsed into `90+`.
+  - *utility*: `PatientAge` kept in its finest DICOM unit (days, weeks, months
+    or years), computed at the study date; size and weight kept.
+- **Method.** The synthetic cohort, whose true ages are known, including
+  the children under 2 and the patients over 90.
+- **Metrics.**
+  - Age error: absolute difference between true age and the age the output
+    allows (band midpoint for *basic*), in years; median and 95th percentile.
+  - Uniqueness: share of records that are unique (k = 1) and share with
+    k < 5, over four quasi-identifiers (age as kept by the profile,
+    PatientSex, Modality, and study year-month after date shifting), under
+    each profile.
+- **No success threshold.**
+
+### E8: AI-agent use of de-identified data
+
+Moved to future work and not part of this study.
+
+## 4. What we will not do
+
+- Tune any rule on the MIDI test set, or re-run the test set to improve a score.
+- Drop files, categories or patients from the results without reporting them.
+- Report a percentage without its count and denominator.
+- Describe the results as anonymisation, as regulatory compliance or as
+  clinical validation.
+- Claim anything about burned-in pixel text beyond what the quarantine rule
+  does: pixel data is not inspected.
+
+## 5. Reproducibility
+
+Each experiment has one script under `experiments/` (E1 to E7). Each script
+writes its results and the commit hash, configuration, seed, dataset
+checksums and software versions it ran with (see
+[results_schema.md](results_schema.md)). Separate scripts rebuild every figure
+from the saved results alone. The README section "Reproducing the paper"
+gives the exact commands.
+
+## Deviations from this protocol
+
+None so far. Each deviation is listed here with its date, what changed, why,
+and which results it affects.
