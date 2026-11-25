@@ -25,7 +25,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from .db import DeidAuditEvent, Instance, Patient, Series, Study, init_db
-from .dicom_deid import PROFILE_VERSION, deidentify
+from .dicom_deid import deidentify, profile_version
 from .reader import extract_metadata, iter_candidate_files, to_dicom_json
 from .verify import find_residual_phi
 
@@ -57,17 +57,18 @@ def _get_or_create(session: Session, model, key: str, value, **fields):
 
 
 def _audit(session: Session, run_id: str, source_sha256: str, outcome: str,
-           reason: str | None = None, sop_uid: str | None = None, actions: dict | None = None) -> None:
+           reason: str | None = None, sop_uid: str | None = None, actions: dict | None = None,
+           profile: str = "basic") -> None:
     session.add(DeidAuditEvent(
         run_id=run_id, source_sha256=source_sha256, outcome=outcome, reason=reason,
-        sop_instance_uid=sop_uid, profile_version=PROFILE_VERSION, actions=actions,
+        sop_instance_uid=sop_uid, profile_version=profile_version(profile), actions=actions,
     ))
 
 
 def _process_file(session: Session, raw: bytes, src_hash: str, run_id: str,
-                  out_dir: Path, quarantine_dir: Path, secret: bytes | None) -> str:
+                  out_dir: Path, quarantine_dir: Path, secret: bytes | None, profile: str = "basic") -> str:
     ds = pydicom.dcmread(io.BytesIO(raw))
-    result = deidentify(ds, secret)
+    result = deidentify(ds, secret, profile=profile)
     deid = result.dataset
     if "SOPInstanceUID" not in deid or "StudyInstanceUID" not in deid or "SeriesInstanceUID" not in deid:
         raise ValueError("missing Study/Series/SOP Instance UID")
@@ -83,7 +84,7 @@ def _process_file(session: Session, raw: bytes, src_hash: str, run_id: str,
     meta = extract_metadata(deid)
     sop_uid = meta["instance"]["sop_instance_uid"]
     if session.scalar(select(Instance.id).where(Instance.sop_instance_uid == sop_uid)):
-        _audit(session, run_id, src_hash, "SKIPPED_DUPLICATE", sop_uid=sop_uid)
+        _audit(session, run_id, src_hash, "SKIPPED_DUPLICATE", sop_uid=sop_uid, profile=profile)
         return "duplicate"
 
     patient = _get_or_create(session, Patient, "patient_token", result.patient_token, **meta["patient"])
@@ -108,7 +109,7 @@ def _process_file(session: Session, raw: bytes, src_hash: str, run_id: str,
         **instance_fields,
     ))
     _audit(session, run_id, src_hash, status, reason="; ".join(reasons) or None,
-           sop_uid=sop_uid, actions=result.actions)
+           sop_uid=sop_uid, actions=result.actions, profile=profile)
     session.flush()
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +118,7 @@ def _process_file(session: Session, raw: bytes, src_hash: str, run_id: str,
 
 
 def ingest(src: Path, out_dir: Path, quarantine_dir: Path, engine: Engine,
-           secret: bytes | None = None) -> IngestSummary:
+           secret: bytes | None = None, profile: str = "basic") -> IngestSummary:
     init_db(engine)
     summary = IngestSummary(run_id=str(uuid.uuid4()))
     out_dir, quarantine_dir = Path(out_dir), Path(quarantine_dir)
@@ -128,17 +129,17 @@ def ingest(src: Path, out_dir: Path, quarantine_dir: Path, engine: Engine,
         src_hash = hashlib.sha256(raw).hexdigest()
         with Session(engine) as session:
             try:
-                outcome = _process_file(session, raw, src_hash, summary.run_id, out_dir, quarantine_dir, secret)
+                outcome = _process_file(session, raw, src_hash, summary.run_id, out_dir, quarantine_dir, secret, profile)
                 session.commit()
             except InvalidDicomError:
                 session.rollback()
-                _audit(session, summary.run_id, src_hash, "NOT_DICOM")
+                _audit(session, summary.run_id, src_hash, "NOT_DICOM", profile=profile)
                 session.commit()
                 outcome = "not_dicom"
             except Exception as exc:  # noqa: BLE001 -- record and continue with the next file
                 session.rollback()
                 # Exception type only: messages can quote tag values (PHI).
-                _audit(session, summary.run_id, src_hash, "FAILED", reason=type(exc).__name__)
+                _audit(session, summary.run_id, src_hash, "FAILED", reason=type(exc).__name__, profile=profile)
                 session.commit()
                 outcome = "failed"
         if outcome == "duplicate":

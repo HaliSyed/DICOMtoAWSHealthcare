@@ -1,8 +1,8 @@
 # Testing Report: Phase 0
 
-**Date:** 2026-09-30 (updated 2026-11-24: PatientAge units fix, pinned dependencies, CI)
+**Date:** 2026-09-30 (updated 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles)
 **Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
-**Result:** ✅ **50 / 50 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **64 / 64 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from public
 sources: the sample files that ship with pydicom, and the five Rubo Medical demo
@@ -19,7 +19,7 @@ this project uses it. Anything marked *planned* is not in the code yet.
 
 | Item | Version tested | What it is | Purpose in this project |
 |---|---|---|---|
-| **OS** | Windows 10 Pro 10.0.19045 | Operating system of the test machine | The only OS tested locally. The code has no Windows-specific parts (it uses `pathlib` for all paths). A GitHub Actions matrix (Ubuntu, macOS, Windows × Python 3.11, 3.12) is configured in `.github/workflows/tests.yml`; see [Not tested](#6-not-tested) until its first run is recorded. |
+| **OS** | Windows 10 Pro 10.0.19045 | Operating system of the test machine | The only OS tested locally. The code has no Windows-specific parts (it uses `pathlib` for all paths). A GitHub Actions matrix (Ubuntu, macOS, Windows × Python 3.11, 3.12) runs on every push and PR (`.github/workflows/tests.yml`). First full green run: 2026-11-24, commit `2af77c0` (PR #7), all 6 jobs passed. |
 | **Python** | 3.11.9 (minimum 3.10) | The programming language and interpreter | Runs all code. 3.10+ is required because the code uses modern type hints such as `str \| None`. |
 | **SQLite** | 3.45.1 (via Python's built-in `sqlite3` module) | A file-based SQL database engine that needs no server | **The Phase 0 local database** (`data/db/deid.sqlite`). It stores patients, studies, series, instances and the audit log. It was chosen for Phase 0 because it needs no install and works offline, e.g. in a workshop room. PostgreSQL replaces it in Phase 1 without code changes. |
 
@@ -41,7 +41,7 @@ Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirem
 
 | Library | Version tested | Extra | What it is | Purpose in this project |
 |---|---|---|---|---|
-| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 50 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
+| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 64 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
 | **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
 | **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
 
@@ -131,7 +131,7 @@ and redistributable, and its source is recorded in section 4.4.
 ## 3. Automated tests (pytest)
 
 ```text
-50 passed, 1 warning
+64 passed, 1 warning
 ```
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
@@ -199,6 +199,16 @@ The single warning is expected. pydicom complains about the deliberately truncat
 |---|---|---|---|
 | 38 | `test_samples_ingest` | All 5 sample files ingest without failure and all are quarantined (XA/US without a burned-in flag). They resolve to 4 patients and 4 series (3 XA, 1 US), because two files share a patient and series. | ✅ PASS |
 | 39 | `test_samples_no_leak` | No patient name, ID, birth date, accession, institution or original UID from the samples appears in the de-identified files or the database | ✅ PASS |
+
+### 3.7 De-identification profiles: `tests/test_profiles.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 51–60 | `test_age_string_uses_finest_unit[…]` (10 cases) | Exact age is written in the finest DICOM unit at the study date: day of birth `000D`, newborn `010D`, 27 days `027D`; 28 days `004W`, 140 days `020W`; 7 months `007M`; one day before 4 years `047M`, 4th birthday `004Y`; 92 years `092Y`. A birth date after the study date gives no age. | ✅ PASS |
+| 61 | `test_utility_age_without_birth_date_keeps_recorded_value` | With no birth date, a valid recorded `PatientAge` (`005M`) is kept as recorded; a malformed one (`45Y`) is dropped, not guessed | ✅ PASS |
+| 62 | `test_utility_keeps_age_size_weight_and_nothing_else` | `basic` removes age, size and weight; `utility` keeps them. Token, date shift, age band, StudyDate, Study/Series/SOP UIDs and accession token are identical under both, so outputs stay linkable. The profile is named in `DeidentificationMethod` (≤ 64 chars) and the verifier reports no issues. | ✅ PASS |
+| 63 | `test_unknown_profile_is_refused` | An unknown profile name raises an error instead of silently falling back | ✅ PASS |
+| 64 | `test_utility_ingest_has_no_leaks_and_records_profile` | Full ingest with `--profile utility`: no failures, every audit event records the utility profile, the byte-level leak scan of files and database finds nothing, and every released file carries `PatientAge` | ✅ PASS |
 
 ---
 
@@ -353,6 +363,5 @@ git-ignored (`*.dcm` / `*.DCM`).
 | **Burned-in pixel text** | Phase 0 does not inspect pixels by design; risky images are quarantined instead | Phase 1 OCR + masking |
 | **Real clinical DICOM / HL7** | Out of scope for this public repo | Phase 1, controlled environment only |
 | **Performance at scale** | Largest run was 28 files | Load test in Phase 1 (thousands of studies) |
-| **Linux / macOS** | Only run locally on Windows | CI workflow added (Ubuntu, macOS, Windows × Python 3.11, 3.12); record the first green run here |
 | **JPEG Extended / JPEG Lossless / JPEG-LS decoding** | No decoder plugin installed; such files are reported as *not decodable* (test 29) rather than failing | Add `pylibjpeg` plugins in Phase 1 |
 | **Path B (AWS-managed)** | No AWS account was used; the guide is documentation only | Infrastructure code next, then deployment tests in a sandbox account with synthetic data |

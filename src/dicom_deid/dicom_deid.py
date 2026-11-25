@@ -47,6 +47,15 @@ from .pseudonym import (
 from .text_deid import redact_free_text
 
 PROFILE_VERSION = "dicom-deid 0.1: PS3.15 E.1 subset + date shift"  # LO VR: max 64 chars
+PROFILES = ("basic", "utility")
+# `utility` keeps exact age, size and weight for age-related research. It is
+# riskier (exact age narrows who a record can be), so it is never the default.
+UTILITY_KEEP = ("PatientSize", "PatientWeight")
+
+
+def profile_version(profile: str = "basic") -> str:
+    """The DeidentificationMethod / audit string for a profile (<= 64 chars)."""
+    return PROFILE_VERSION if profile == "basic" else f"{PROFILE_VERSION}; {profile}"
 STANDARD_UID_ROOT = "1.2.840.10008."
 
 REMOVE_KEYWORDS = [
@@ -174,6 +183,39 @@ def _age_from_as(age_str: str) -> int | None:
     return None
 
 
+def age_string(birth: date, on: date) -> str | None:
+    """Age at `on` as a DICOM Age String in the finest sensible unit.
+
+    DICOM allows D/W/M/Y but sets no rule for which to use; this follows the
+    common clinical convention: days under 4 weeks, weeks under 26 weeks,
+    months under 4 years, years after that.
+    """
+    days = (on - birth).days
+    if days < 0:
+        return None
+    if days < 28:
+        return f"{days:03d}D"
+    if days < 26 * 7:
+        return f"{days // 7:03d}W"
+    months = (on.year - birth.year) * 12 + on.month - birth.month - (on.day < birth.day)
+    if months < 48:
+        return f"{months:03d}M"
+    return f"{min(age_at(birth, on), 999):03d}Y"
+
+
+def _utility_age(ds: Dataset) -> str | None:
+    """Exact age for the utility profile: from birth and study dates, else the recorded PatientAge."""
+    birth = _parse_da(ds.get("PatientBirthDate"))
+    ref = next(
+        (d for d in (_parse_da(ds.get(k)) for k in ("StudyDate", "SeriesDate", "AcquisitionDate", "ContentDate")) if d),
+        None,
+    )
+    if birth and ref:
+        return age_string(birth, ref)
+    recorded = str(ds.get("PatientAge", "") or "")
+    return recorded if _age_from_as(recorded) is not None else None
+
+
 def _pseudonym_key(ds: Dataset) -> str:
     pid = str(ds.get("PatientID", "") or "").strip()
     if pid:
@@ -243,9 +285,21 @@ def _apply_generic(ds: Dataset, days: int, secret: bytes | None, actions: Counte
                 actions["uid_remapped"] += 1
 
 
-def deidentify(ds: Dataset, secret: bytes | None = None) -> DeidResult:
-    """De-identify `ds` in place and return it with what was done."""
+def deidentify(ds: Dataset, secret: bytes | None = None, profile: str = "basic") -> DeidResult:
+    """De-identify `ds` in place and return it with what was done.
+
+    `profile` is "basic" (default) or "utility"; see PROFILES. Both give the
+    same tokens, UIDs and date shifts, so their outputs stay linkable.
+    """
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}; expected one of {PROFILES}")
     actions: Counter = Counter()
+    keep: dict[str, object] = {}
+    if profile == "utility":
+        exact_age = _utility_age(ds)
+        if exact_age:
+            keep["PatientAge"] = exact_age
+        keep.update({kw: ds[kw].value for kw in UTILITY_KEEP if kw in ds and ds[kw].value not in (None, "")})
     identifiers = collect_identifiers(ds)
     token = patient_token(_pseudonym_key(ds), secret)
     days = date_shift_days(token, secret)
@@ -266,6 +320,11 @@ def deidentify(ds: Dataset, secret: bytes | None = None) -> DeidResult:
             ds[kw].value = ""
             actions["emptied"] += 1
 
+    # utility profile: put back the values it keeps (top level only)
+    for kw, value in keep.items():
+        setattr(ds, kw, value)
+        actions["retained_utility"] += 1
+
     # 4. generic VR rules
     _apply_generic(ds, days, secret, actions)
 
@@ -283,7 +342,7 @@ def deidentify(ds: Dataset, secret: bytes | None = None) -> DeidResult:
 
     # 6. markers
     ds.PatientIdentityRemoved = "YES"
-    ds.DeidentificationMethod = PROFILE_VERSION
+    ds.DeidentificationMethod = profile_version(profile)
     ds.LongitudinalTemporalInformationModified = "MODIFIED"
 
     meta = getattr(ds, "file_meta", None)
