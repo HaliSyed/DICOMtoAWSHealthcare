@@ -1,8 +1,8 @@
 # Testing Report: Phase 0
 
-**Date:** 2026-09-30 (updated 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles)
+**Date:** 2026-09-30 (updated 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles, experiment cohort generator)
 **Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
-**Result:** ✅ **64 / 64 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **68 / 68 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from public
 sources: the sample files that ship with pydicom, and the five Rubo Medical demo
@@ -37,12 +37,13 @@ These are declared under `dependencies` in `pyproject.toml`, so every install ge
 
 ### 1.3 Optional libraries (installed as extras)
 
-Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirements.txt` installs `aws` and `dev`.
+Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirements.txt` installs `aws`, `dev` and `experiments`.
 
 | Library | Version tested | Extra | What it is | Purpose in this project |
 |---|---|---|---|---|
-| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 64 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
+| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 68 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
 | **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
+| **psutil** | 7.2.2 | `experiments` | A cross-platform library for process and system information | Measures peak memory (resident set size) in experiment E6, the same way on Linux, macOS and Windows. Experiment-only: the pipeline itself does not import it. |
 | **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
 
 ### 1.4 Build and install tooling
@@ -131,7 +132,7 @@ and redistributable, and its source is recorded in section 4.4.
 ## 3. Automated tests (pytest)
 
 ```text
-64 passed, 1 warning
+68 passed, 1 warning
 ```
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
@@ -209,6 +210,17 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 62 | `test_utility_keeps_age_size_weight_and_nothing_else` | `basic` removes age, size and weight; `utility` keeps them. Token, date shift, age band, StudyDate, Study/Series/SOP UIDs and accession token are identical under both, so outputs stay linkable. The profile is named in `DeidentificationMethod` (≤ 64 chars) and the verifier reports no issues. | ✅ PASS |
 | 63 | `test_unknown_profile_is_refused` | An unknown profile name raises an error instead of silently falling back | ✅ PASS |
 | 64 | `test_utility_ingest_has_no_leaks_and_records_profile` | Full ingest with `--profile utility`: no failures, every audit event records the utility profile, the byte-level leak scan of files and database finds nothing, and every released file carries `PatientAge` | ✅ PASS |
+
+### 3.8 Experiment cohort: `tests/test_cohort.py`
+
+The synthetic cohort for experiments E3 and E7 (see `docs/protocol.md`), built by `experiments/cohort.py`.
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 65 | `test_protocol_spec_is_met` | Seed is the protocol seed `20261125`; 100 patients; every patient has 3 to 5 studies; at least 20 are under 2 and at least 5 are over 90 at their first study | ✅ PASS |
+| 66 | `test_ground_truth_matches_files` | Every manifest row matches its DICOM file (ID, birth date, study date, study UID, sex, modality, recorded age); no study before birth or after the reference date; one distinct ID per patient | ✅ PASS |
+| 67 | `test_same_seed_same_cohort_different_seed_different` | The same seed rebuilds a byte-identical cohort and manifest; a different seed gives a different cohort | ✅ PASS |
+| 68 | `test_manifest_written_and_folders_carry_no_names` | The manifest on disk equals the one returned; folder names are opaque (`p000/s0`), never patient names | ✅ PASS |
 
 ---
 

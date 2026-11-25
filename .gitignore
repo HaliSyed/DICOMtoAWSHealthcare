@@ -36,6 +36,7 @@ data/incoming/
 data/dicom/
 data/db/
 data/referral_letters_deid/
+data/experiments/
 
 # Local tooling / archives
 *.zip

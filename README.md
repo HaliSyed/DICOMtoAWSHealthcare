@@ -60,7 +60,7 @@ data enters Path B's managed services.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 64 automated tests passing ([TESTING.md](TESTING.md)) |
+| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 68 automated tests passing ([TESTING.md](TESTING.md)) |
 | **1** | Real DICOM images + HL7 v2 messages; PostgreSQL; production hardening | 🔜 Next |
 | **2** | FHIR R4 layer (ImagingStudy, Patient, DiagnosticReport…), with PDPL-aligned controls | 📐 Designed, see roadmap |
 | **3** | AWS pipeline: S3 → HealthImaging → inference → report generation (**Path B**) | 📐 Setup guide written: [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md); IaC next |
@@ -144,13 +144,14 @@ To run it on your own (synthetic or public) DICOM folder, use
 ### Run the tests
 
 ```bash
-pytest            # 64 tests, about 10 seconds, fully offline
+pytest            # 68 tests, about 15 seconds, fully offline
 ```
 
 | Test file | Tests | What it covers |
 |---|---|---|
 | `tests/test_pseudonym.py` | 4 | Keyed tokens, week-based date shifts, UID remapping, age bands |
 | `tests/test_dicom_deid.py` | 21 | Every de-identification rule, the independent verifier, burned-in risk, real vendor files from pydicom (one has 179 private tags), `PatientAge` in every DICOM unit |
+| `tests/test_cohort.py` | 4 | The experiment cohort generator meets the protocol spec, matches its ground truth and is reproducible from its seed |
 | `tests/test_profiles.py` | 14 | `basic` vs `utility` profile: exact age in its finest unit (newborns, infants, over 90), size and weight kept, linkage identical, no leaks |
 | `tests/test_pipeline.py` | 5 | End-to-end ingest, **byte-level leak scan** of outputs and database, idempotent re-run, corrupt files, foreign keys |
 | `tests/test_scripts.py` | 5 | Workshop Demo 1 (CSV) and Demo 2 (letters), reproducibility |
@@ -404,7 +405,7 @@ Design choices worth pointing out live:
 - [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Demo 1 (CSV) and Demo 2 (letters) scripts, now reproducible
-- [x] 64 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
+- [x] 68 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
 
 ### Phase 1: Real data: DICOM images + HL7 messages
 
@@ -588,6 +589,7 @@ DICOMtoAWSHealthcare/
 │   ├── synthetic.py            synthetic "dirty" DICOM generator
 │   └── text_deid.py            regex redaction for free text and letters
 ├── tools/sync_to_main.py       tests + secret scan + push + PR + review request
+├── experiments/                research-paper experiments (cohort.py: synthetic study cohort); see docs/protocol.md
 ├── scripts/                    workshop demos (Demo 1 / Demo 2 / Comprehend Medical) + leak_scan.py
 ├── AWS-Managed-Healthcare/     Path B: AWS-managed setup guide (IaC to follow)
 ├── tests/                      pytest suite
