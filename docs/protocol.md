@@ -1,16 +1,15 @@
 # Experimental protocol
 
-**Status: DRAFT, not yet frozen.** The design decisions are made; what remains
-are facts to fill in, marked `[RECORD]` and `[TITLE]` and
-listed in [Open decisions](#open-decisions). Once every such marker is resolved, the draft is
-committed and pushed to the public repository as the frozen protocol, before
+**Status: FROZEN.** Every open decision is resolved (see
+[Open decisions](#open-decisions)). This version is merged into `main` before
 any experiment is run, so the commit timestamp records the plan ahead of the
-results. From then on, any change is made in a new commit, listed under
+results. From now on, any change is made in a new commit, listed under
 [Deviations](#deviations-from-this-protocol), and reported in the paper.
 
 **Software under test:** this repository. Every result file records the
 commit hash it was produced from (see [results_schema.md](results_schema.md)).
-The study freeze is released as v1.0.0 with its own Zenodo DOI.
+The frozen protocol is released as v0.2.0 ("protocol frozen"), which gives it
+a Zenodo DOI and timestamp. v1.0.0 is released after the experiments.
 
 ---
 
@@ -27,33 +26,29 @@ result will be presented as proof of anonymity or of regulatory compliance.
 
 | Dataset | Used in | Notes |
 |---|---|---|
-| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Collections `MIDI-B-Synthetic-Validation` (216 patients) and `MIDI-B-Synthetic-Test` (322 patients): in total 538 patients, 605 studies, 708 series and 53,581 instances (Rutherford et al., arXiv:2508.01889). DOI: 10.7937/cf2p-aw56. Licence: CC BY 4.0 [RECORD: confirm on the TCIA page]. Collection version: [RECORD: from the TCIA Versions tab]. Access date: [RECORD: download date]. Scoring script: https://github.com/CBIIT/MIDI_validation_script at commit [RECORD: hash], also written to each `run.json`. The test answer key is public, so the test set is run once, at the frozen commit, and never used for tuning. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
+| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Collections `MIDI-B-Synthetic-Validation` (216 patients) and `MIDI-B-Synthetic-Test` (322 patients): in total 538 patients, 605 studies, 708 series and 53,581 instances (Rutherford et al., arXiv:2508.01889). DOI: 10.7937/cf2p-aw56. Licence: CC BY 4.0 under the TCIA Data Usage Policy; citation required (confirmed on the TCIA collection page). Cite as: "Data in Support of the MIDI-B Challenge (MIDI-B-Synthetic-Validation, MIDI-B-Curated-Validation, MIDI-B-Synthetic-Test, MIDI-B-Curated-Test)", Version 1. Collection version: 1, updated 2025-05-02. Access date: the date of the copy used, recorded in `data/midi/PROVENANCE.md` when the copy is downloaded, together with a check that the sizes match TCIA (Synthetic Validation 7.63 GB, 216 subjects; Synthetic Test 11.09 GB, 322 subjects). Only the two Synthetic collections are used; the Curated collections are not. Scoring script: https://github.com/CBIIT/MIDI_validation_script pinned at commit `ccc0939317d5ffd14edda33bc04641490d6f2254` (2026-06-22; latest tag v3.14), also written to each `run.json`. The test answer key is public, so the test set is run once, at the frozen commit, and never used for tuning. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
 | **Synthetic cohort** (part of this study, built by `experiments/cohort.py`; `dicom-deid synth` is not used): 100 synthetic patients with 3 to 5 studies each, including at least 20 children under 2 years at their first study and at least 5 patients over 90, generated with seed `20261125` | E3, E7 | Generated, never downloaded; the seed and generator commit are recorded. |
 | **Seeded-identifier set**: 200 planted synthetic identifiers in at least 20 synthetic files, seed `20261125` | E2(b) | See E2(b). |
 | **Attribute list** of everything the pipeline removes or changes | E5 | Produced from the de-identification rules at the frozen commit. |
 
-### 2.0 Data derived from real sources (modified)
+### 2.0 No real patient or hospital data
 
-Some experiments also use DICOM files that **come from real sources and were
-modified before they entered the pipeline**: [RECORD: which experiments].
-The sources are a regenerative medicine hospital in DHA, Rawalpindi;
-Al-Kareem Hospital, Rawalpindi; personal records; and public archives and
-libraries of DICOM data. The hospital and personal files come from a small,
-selected group of patients who gave their consent. These files are not
-synthetic, and the modification is not a proof of anonymity.
+**No hospital or patient data is used in this study.** The data are the MIDI-B
+Synthetic collections (public, with synthetic identifiers), the synthetic
+cohort and the seeded-identifier set. No file from Al-Kareem Hospital or from
+any other hospital, and no personal record, enters any experiment.
 
-- **Never in this repository.** The files are never committed to git or put in
-  the repository, the database dumps, logs or result files. They are held
-  only in [RECORD: where and who has access].
-- **Results are aggregates only**, as in [results_schema.md](results_schema.md).
-  No identifiers and no source file paths appear in any output.
-- **To be recorded before the freeze:** the consent given and its scope, the
-  ethics or institutional approval (reference and date), exactly how the files
-  were modified, the number of files and patients per source, and the licence
-  of every public source. [RECORD]
-- **Stated in the paper:** that these files come from real people, that
-  consent was obtained, how they were modified, and that the results for them
-  are reported separately from the MIDI-B and synthetic-cohort results.
+- Al-Kareem Hospital, Rawalpindi appears only as the affiliation of the two
+  raters in E5.
+- The only DICOM files in this repository are five public Rubo Medical demo
+  samples in `tests/data/dicom/` (patient name "Rubo DEMO"). They are used by
+  the test suite only, in no experiment.
+- Checked on 2026-11-26: no hospital name and no non-synthetic patient data in
+  the tracked files or in the git history. Real data is processed only in a
+  separate, access-controlled environment inside the UAE, never in this
+  repository.
+- If real or modified-real data were ever added, that would be a deviation
+  and would need consent and ethics approval first.
 
 ### 2.1 Tuning and test discipline
 
@@ -149,9 +144,9 @@ analysis).
 ### E5: Clinical relevance of removed attributes
 
 - **Question.** Which removed or changed details would clinicians need?
-- **Raters.** Dr. Syeda Sana Ali ([TITLE], Obstetrics and Gynaecology,
+- **Raters.** Dr. Syeda Sana Ali (Specialist Obstetrician and Gynaecologist,
   Al-Kareem Hospital, Rawalpindi, Pakistan) and Dr. Syeda Itrat Fatima
-  ([TITLE], Paediatrics, Al-Kareem Hospital, Rawalpindi, Pakistan).
+  (Consultant Paediatrician, Al-Kareem Hospital, Rawalpindi, Pakistan).
 - **Method.** The two raters, independently and without seeing each other's
   ratings, rate every attribute the pipeline removes or changes:
   *essential*, *useful* or *not needed*, with a one-line reason.
@@ -234,19 +229,19 @@ gives the exact commands.
 
 ## Open decisions
 
-Resolve each one, replace its marker in the text above, and then freeze.
+All resolved; the protocol is frozen.
 
 | # | Where | Decision | Answer |
 |---|---|---|---|
 | 1 | E7, age error | Age allowed by the `90+` band | Resolved: 90 (`090Y`); error is `true age - 90` |
 | 2 | E7, uniqueness | Unit of a record | Resolved: one study (primary); patients with a unique study (secondary) |
-| 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Open, from Raza: [RECORD] |
+| 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Resolved: CC BY 4.0 (TCIA Data Usage Policy); version 1 (2025-05-02); access date in `data/midi/PROVENANCE.md`; scorer pinned at `ccc0939` |
 | 4 | E5 | Hospital of the two raters | Resolved: Al-Kareem Hospital, Rawalpindi, Pakistan (both) |
-| 5 | E5 | Titles of the two raters | Open: [TITLE] |
-| 6 | Section 2.0 | Which experiments use the modified real-source files | Open: [RECORD] |
-| 7 | Section 2.0 | Consent scope, ethics or institutional approval (reference, date) | Open: [RECORD] |
-| 8 | Section 2.0 | How the files were modified; counts per source | Open: [RECORD] |
-| 9 | Section 2.0 | Where the files are held and who has access; licence of each public source | Open: [RECORD] |
+| 5 | E5 | Titles of the two raters | Resolved: Specialist Obstetrician and Gynaecologist (Dr. Sana Ali); Consultant Paediatrician (Dr. Itrat Fatima) |
+| 6 | Section 2.0 | Which experiments use the modified real-source files | Resolved: none; no real data is used |
+| 7 | Section 2.0 | Consent scope, ethics or institutional approval | Resolved: not applicable, no real data is used |
+| 8 | Section 2.0 | How the files were modified; counts per source | Resolved: not applicable |
+| 9 | Section 2.0 | Where the files are held; licence of each public source | Resolved: not applicable; the only public source is MIDI-B (row 3) |
 
 ## Deviations from this protocol
 
