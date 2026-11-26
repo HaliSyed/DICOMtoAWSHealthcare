@@ -1,8 +1,8 @@
 # Experimental protocol
 
-**Status: DRAFT, not yet frozen.** Open decisions are marked `[DECIDE]` and
-listed in [Open decisions](#open-decisions). Once every `[DECIDE]`,
-`[RECORD]`, `[TITLE]` and `[HOSPITAL]` marker is resolved, the draft is
+**Status: DRAFT, not yet frozen.** The design decisions are made; what remains
+are facts to fill in, marked `[RECORD]`, `[TITLE]` and `[HOSPITAL, city]` and
+listed in [Open decisions](#open-decisions). Once every such marker is resolved, the draft is
 committed and pushed to the public repository as the frozen protocol, before
 any experiment is run, so the commit timestamp records the plan ahead of the
 results. From then on, any change is made in a new commit, listed under
@@ -27,7 +27,7 @@ result will be presented as proof of anonymity or of regulatory compliance.
 
 | Dataset | Used in | Notes |
 |---|---|---|
-| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Validation set: 216 patients. Test set: 322 patients. In total 538 patients, 605 studies and 53,581 instances (as described in Rutherford et al., arXiv:2508.01889). Collection version / DOI: [RECORD FROM TCIA]. Access date: [RECORD]. Licence / data usage agreement: [RECORD]. Scoring script source and version: [RECORD]. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
+| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Collections `MIDI-B-Synthetic-Validation` (216 patients) and `MIDI-B-Synthetic-Test` (322 patients): in total 538 patients, 605 studies, 708 series and 53,581 instances (Rutherford et al., arXiv:2508.01889). DOI: 10.7937/cf2p-aw56. Licence: CC BY 4.0 [RECORD: confirm on the TCIA page]. Collection version: [RECORD: from the TCIA Versions tab]. Access date: [RECORD: download date]. Scoring script: https://github.com/CBIIT/MIDI_validation_script at commit [RECORD: hash], also written to each `run.json`. The test answer key is public, so the test set is run once, at the frozen commit, and never used for tuning. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
 | **Synthetic cohort** (part of this study, built by `experiments/cohort.py`; `dicom-deid synth` is not used): 100 synthetic patients with 3 to 5 studies each, including at least 20 children under 2 years at their first study and at least 5 patients over 90, generated with seed `20261125` | E3, E7 | Generated, never downloaded; the seed and generator commit are recorded. |
 | **Seeded-identifier set**: 200 planted synthetic identifiers in at least 20 synthetic files, seed `20261125` | E2(b) | See E2(b). |
 | **Attribute list** of everything the pipeline removes or changes | E5 | Produced from the de-identification rules at the frozen commit. |
@@ -129,7 +129,8 @@ analysis).
 
 - **Question.** Which removed or changed details would clinicians need?
 - **Raters.** Dr. Syeda Sana Ali ([TITLE], Obstetrics and Gynaecology,
-  [HOSPITAL]) and Dr. Syeda Itrat Fatima ([TITLE], Paediatrics, [HOSPITAL]).
+  [HOSPITAL, city]) and Dr. Syeda Itrat Fatima ([TITLE], Paediatrics,
+  [HOSPITAL, city]).
 - **Method.** The two raters, independently and without seeing each other's
   ratings, rate every attribute the pipeline removes or changes:
   *essential*, *useful* or *not needed*, with a one-line reason.
@@ -167,24 +168,29 @@ analysis).
 - **Method.** The synthetic cohort, whose true ages are known, including
   the children under 2 and the patients over 90.
 - **Metrics.**
-  - Age error: absolute difference between true age and the age the output
-    allows, in years; median and 95th percentile, reported separately for
-    children under 2, adults and patients over 90. For *basic* the age
-    allowed is the band midpoint (`0-9` is 4.5 years, `10-19` is 14.5, and so
-    on). For the `90+` band the age allowed is **[DECIDE: 90 (the lower
-    bound) or 95]**. For *utility* the age allowed is the age as kept, so
-    the error is 0 below 90 and `true age - 90` at 90 and over, because of
-    the cap. Children under 2 are the group where the profiles differ most.
+  - Age error: absolute difference, in years, between the **true** age and
+    the age the output allows; median and 95th percentile, reported
+    separately for children under 2, adults under 90 and patients aged 90
+    and over. Error is always measured against the true age, never against
+    a capped or banded value. For *basic* the age allowed is the band
+    midpoint (`0-9` is 4.5 years, `10-19` is 14.5, and so on). For the
+    `90+` band, and for *utility* at 90 and over, the age allowed is 90 (the
+    value written as `090Y`), so the error is `true age - 90`. Patients
+    aged 90 and over are reported separately and the paper explains that
+    the cap, not the pipeline, causes their error. For *utility* below 90
+    the age is kept exactly, so the error is 0. Children under 2 are the
+    group where the profiles differ most.
   - Uniqueness: share of records that are unique (k = 1) and share with
     k < 5, over four quasi-identifiers (age as kept by the profile,
     PatientSex, Modality, and study year-month after date shifting), under
-    each profile. A record is **[DECIDE: one study, or one patient]**; the
-    choice is fixed here because it changes every k.
+    each profile. The **primary unit is one study**, the unit of release.
+    Secondary: the share of patients with at least one unique study.
 - **No success threshold.**
 
 ### E8: AI-agent use of de-identified data
 
-Moved to future work and not part of this study.
+AI-agent use of de-identified data (OctoTools) is future work and out of
+scope for this study.
 
 ## 4. What we will not do
 
@@ -211,10 +217,10 @@ Resolve each one, replace its marker in the text above, and then freeze.
 
 | # | Where | Decision | Answer |
 |---|---|---|---|
-| 1 | E7, age error | Age allowed by the `90+` band: 90 or 95 | [DECIDE] |
-| 2 | E7, uniqueness | Unit of a record: study or patient | [DECIDE] |
-| 3 | Section 2 | MIDI-B version, access date, licence, scoring script version | [RECORD] |
-| 4 | E5 | Titles and hospitals of the two raters | [TITLE], [HOSPITAL] |
+| 1 | E7, age error | Age allowed by the `90+` band | Resolved: 90 (`090Y`); error is `true age - 90` |
+| 2 | E7, uniqueness | Unit of a record | Resolved: one study (primary); patients with a unique study (secondary) |
+| 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Open, from Raza: [RECORD] |
+| 4 | E5 | Titles, hospitals and cities of the two raters | Open: [TITLE], [HOSPITAL, city] |
 
 ## Deviations from this protocol
 
