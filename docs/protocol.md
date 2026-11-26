@@ -32,7 +32,28 @@ result will be presented as proof of anonymity or of regulatory compliance.
 | **Seeded-identifier set**: 200 planted synthetic identifiers in at least 20 synthetic files, seed `20261125` | E2(b) | See E2(b). |
 | **Attribute list** of everything the pipeline removes or changes | E5 | Produced from the de-identification rules at the frozen commit. |
 
-No real patient data is used in any experiment.
+### 2.0 Data derived from real sources (modified)
+
+Some experiments also use DICOM files that **come from real sources and were
+modified before they entered the pipeline**: [RECORD: which experiments].
+The sources are a regenerative medicine hospital in DHA, Rawalpindi;
+Al-Kareem Hospital, Rawalpindi; personal records; and public archives and
+libraries of DICOM data. The hospital and personal files come from a small,
+selected group of patients who gave their consent. These files are not
+synthetic, and the modification is not a proof of anonymity.
+
+- **Never in this repository.** The files are never committed to git or put in
+  the repository, the database dumps, logs or result files. They are held
+  only in [RECORD: where and who has access].
+- **Results are aggregates only**, as in [results_schema.md](results_schema.md).
+  No identifiers and no source file paths appear in any output.
+- **To be recorded before the freeze:** the consent given and its scope, the
+  ethics or institutional approval (reference and date), exactly how the files
+  were modified, the number of files and patients per source, and the licence
+  of every public source. [RECORD]
+- **Stated in the paper:** that these files come from real people, that
+  consent was obtained, how they were modified, and that the results for them
+  are reported separately from the MIDI-B and synthetic-cohort results.
 
 ### 2.1 Tuning and test discipline
 
@@ -222,6 +243,10 @@ Resolve each one, replace its marker in the text above, and then freeze.
 | 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Open, from Raza: [RECORD] |
 | 4 | E5 | Hospital of the two raters | Resolved: Al-Kareem Hospital, Rawalpindi, Pakistan (both) |
 | 5 | E5 | Titles of the two raters | Open: [TITLE] |
+| 6 | Section 2.0 | Which experiments use the modified real-source files | Open: [RECORD] |
+| 7 | Section 2.0 | Consent scope, ethics or institutional approval (reference, date) | Open: [RECORD] |
+| 8 | Section 2.0 | How the files were modified; counts per source | Open: [RECORD] |
+| 9 | Section 2.0 | Where the files are held and who has access; licence of each public source | Open: [RECORD] |
 
 ## Deviations from this protocol
 
