@@ -224,6 +224,14 @@ The synthetic cohort for experiments E3 and E7 (see `docs/protocol.md`), built b
 | 67 | `test_same_seed_same_cohort_different_seed_different` | The same seed rebuilds a byte-identical cohort and manifest; a different seed gives a different cohort | ✅ PASS |
 | 68 | `test_manifest_written_and_folders_carry_no_names` | The manifest on disk equals the one returned; folder names are opaque (`p000/s0`), never patient names | ✅ PASS |
 
+### 3.9 MIDI-B scorer pin: `tests/test_midi_b_pin.py`
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 69 | `test_scorer_is_pinned_to_a_full_commit_hash` | The scoring-script reference is a 40-character commit hash, not a branch name | ✅ PASS |
+| 70 | `test_protocol_and_schema_state_the_same_pin` | The commit in `experiments/midi_b.py` is the one written in the protocol and the results schema; dataset DOI and access date are in the protocol | ✅ PASS |
+| 71 | `test_midi_b_row_has_no_record_markers_left` | No `[RECORD` placeholder remains in the protocol | ✅ PASS |
+
 ---
 
 ## 4. Manual / end-to-end checks
