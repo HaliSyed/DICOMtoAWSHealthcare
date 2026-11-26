@@ -51,6 +51,7 @@ PROFILES = ("basic", "utility")
 # `utility` keeps exact age, size and weight for age-related research. It is
 # riskier (exact age narrows who a record can be), so it is never the default.
 UTILITY_KEEP = ("PatientSize", "PatientWeight")
+UTILITY_AGE_CAP = 90  # years; older ages are written as "090Y"
 
 
 def profile_version(profile: str = "basic") -> str:
@@ -204,16 +205,25 @@ def age_string(birth: date, on: date) -> str | None:
 
 
 def _utility_age(ds: Dataset) -> str | None:
-    """Exact age for the utility profile: from birth and study dates, else the recorded PatientAge."""
+    """Exact age for the utility profile: from birth and study dates, else the recorded PatientAge.
+
+    Ages of 90 and over are capped at "090Y": very old ages are rare enough to
+    identify someone, and the cap matches the `90+` band of the basic profile
+    and the HIPAA rule for ages over 89.
+    """
     birth = _parse_da(ds.get("PatientBirthDate"))
     ref = next(
         (d for d in (_parse_da(ds.get(k)) for k in ("StudyDate", "SeriesDate", "AcquisitionDate", "ContentDate")) if d),
         None,
     )
     if birth and ref:
-        return age_string(birth, ref)
-    recorded = str(ds.get("PatientAge", "") or "")
-    return recorded if _age_from_as(recorded) is not None else None
+        exact = age_string(birth, ref)
+    else:
+        recorded = str(ds.get("PatientAge", "") or "")
+        exact = recorded if _age_from_as(recorded) is not None else None
+    if exact is not None and (_age_from_as(exact) or 0) >= UTILITY_AGE_CAP:
+        return f"{UTILITY_AGE_CAP:03d}Y"
+    return exact
 
 
 def _pseudonym_key(ds: Dataset) -> str:

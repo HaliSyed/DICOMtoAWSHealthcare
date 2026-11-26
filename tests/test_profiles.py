@@ -39,7 +39,7 @@ def _first_ct(synthetic_dir):
     (date(2026, 1, 1), date(2026, 8, 5), "007M"),     # past 26 weeks -> months
     (date(2020, 3, 15), date(2024, 3, 14), "047M"),   # one day before 4 years
     (date(2020, 3, 15), date(2024, 3, 15), "004Y"),   # 4th birthday -> years
-    (date(1933, 6, 1), date(2026, 5, 31), "092Y"),    # over 90: kept exact in utility
+    (date(1933, 6, 1), date(2026, 5, 31), "092Y"),    # age_string stays exact; _utility_age caps it at 090Y
     (date(2026, 2, 1), date(2026, 1, 1), None),       # birth after study: unusable
 ])
 def test_age_string_uses_finest_unit(birth, ref, expected):
@@ -53,6 +53,31 @@ def test_utility_age_without_birth_date_keeps_recorded_value():
     assert _utility_age(ds) == "005M"
     ds.PatientAge = "45Y"  # malformed: dropped, not guessed
     assert _utility_age(ds) is None
+
+
+@pytest.mark.filterwarnings("ignore:Invalid value for VR AS")
+@pytest.mark.parametrize("birth, study, recorded, expected", [
+    ("19340601", "20260531", "", "090Y"),   # 91 from dates -> capped
+    ("19360601", "20260601", "", "090Y"),   # exactly 90 -> capped
+    ("19360602", "20260601", "", "089Y"),   # one day short of 90 -> exact
+    ("", "", "096Y", "090Y"),               # recorded age over 89 -> capped
+    ("", "", "089Y", "089Y"),               # recorded 89 -> kept
+    ("", "", "1100M", None),                # malformed, not an AS string
+])
+def test_utility_age_is_capped_at_90(birth, study, recorded, expected):
+    ds = Dataset()
+    if birth:
+        ds.PatientBirthDate, ds.StudyDate = birth, study
+    if recorded:
+        ds.PatientAge = recorded
+    assert _utility_age(ds) == expected
+
+
+def test_utility_output_never_holds_age_over_89(synthetic_dir):
+    _, ds = _first_ct(synthetic_dir)
+    ds.PatientBirthDate, ds.StudyDate = "19300101", "20260101"  # 96 years
+    out = deidentify(ds, TEST_SECRET, profile="utility").dataset
+    assert out.PatientAge == "090Y"
 
 
 def test_utility_keeps_age_size_weight_and_nothing_else(synthetic_dir):
