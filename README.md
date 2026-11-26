@@ -405,7 +405,7 @@ Design choices worth pointing out live:
 - [x] Extract study/series/instance metadata, plus the full header as DICOM JSON
 - [x] De-identify: PS3.15 Basic Profile subset, keyed tokens, UID remapping, per-patient week-based date shifts, age bands
 - [x] Independent residual-PHI verifier; quarantine for burned-in-text risk
-- [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
+- [x] Local relational DB (SQLite; tested on PostgreSQL 18 locally) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Demo 1 (CSV) and Demo 2 (letters) scripts, now reproducible
 - [x] 75 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
