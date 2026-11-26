@@ -24,12 +24,19 @@ result will be presented as proof of anonymity or of regulatory compliance.
 
 | Dataset | Used in | Notes |
 |---|---|---|
-| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Validation set: 216 patients. Test set: 322 patients. In total 538 patients, 605 studies and 53,581 instances (as described in Rutherford et al., arXiv:2508.01889). Collection version / DOI: [RECORD FROM TCIA]. Access date: [RECORD]. Licence / data usage agreement: [RECORD]. Scoring script source and version: [RECORD]. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
+| **MIDI-B** (Medical Image De-Identification Benchmark, NCI, on TCIA): DICOM files with synthetic identifiers planted, an answer key and an official scoring script | E1, E2(a), E4, E6 | Validation set: 216 patients. Test set: 322 patients. In total 538 patients, 605 studies and 53,581 instances (as described in Rutherford et al., arXiv:2508.01889). Collection version / DOI: Version 1 (updated 2025/05/02), [10.7937/cf2p-aw56](https://doi.org/10.7937/cf2p-aw56) (see Data citation below). Access date: 2026-07-02. Licence / data usage agreement: CC BY 4.0, confirmed on the TCIA collection page for all 10 data items (synthetic and curated images, answer keys, patient and UID mappings). Scoring script source and version: [CBIIT/MIDI_validation_script](https://github.com/CBIIT/MIDI_validation_script) at commit `ccc0939317d5ffd14edda33bc04641490d6f2254` (main), pinned: all scoring uses exactly this commit. File checksums are written to `results/datasets.json` by the scripts. **Never committed to git.** Splits: see 2.1. |
 | **Synthetic cohort** (part of this study, built by `experiments/cohort.py`; `dicom-deid synth` is not used): 100 synthetic patients with 3 to 5 studies each, including at least 20 children under 2 years at their first study and at least 5 patients over 90, generated with seed `20261125` | E3, E7 | Generated, never downloaded; the seed and generator commit are recorded. |
 | **Seeded-identifier set**: 200 planted synthetic identifiers in at least 20 synthetic files, seed `20261125` | E2(b) | See E2(b). |
 | **Attribute list** of everything the pipeline removes or changes | E5 | Produced from the de-identification rules at the frozen commit. |
 
 No real patient data is used in any experiment.
+
+**Data citation.** Rutherford, M. W., Nolan, T., Pei, L., Wagner, U., Pan, Q.,
+Farmer, P., Smith, K., Kopchick, B., Opsahl-Ong, L., Sutton, G., Clunie, D. A.,
+Farahani, K., & Prior, F. (2025). Data in Support of the MIDI-B Challenge
+(MIDI-B-Synthetic-Validation, MIDI-B-Curated-Validation,
+MIDI-B-Synthetic-Test, MIDI-B-Curated-Test) (Version 1) [Data set]. The Cancer
+Imaging Archive. https://doi.org/10.7937/cf2p-aw56
 
 ### 2.1 Tuning and test discipline
 

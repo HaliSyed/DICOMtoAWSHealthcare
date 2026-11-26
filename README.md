@@ -153,6 +153,7 @@ pytest            # 75 tests, about 15 seconds, fully offline
 | `tests/test_pseudonym.py` | 4 | Keyed tokens, week-based date shifts, UID remapping, age bands |
 | `tests/test_dicom_deid.py` | 21 | Every de-identification rule, the independent verifier, burned-in risk, real vendor files from pydicom (one has 179 private tags), `PatientAge` in every DICOM unit |
 | `tests/test_cohort.py` | 4 | The experiment cohort generator meets the protocol spec, matches its ground truth and is reproducible from its seed |
+| `tests/test_midi_b_pin.py` | 3 | The MIDI-B scorer is pinned to a full commit hash that matches the protocol and results schema |
 | `tests/test_profiles.py` | 21 | `basic` vs `utility` profile: exact age in its finest unit (newborns, infants), ages 90 and over capped at `090Y`, size and weight kept, linkage identical, no leaks |
 | `tests/test_pipeline.py` | 5 | End-to-end ingest, **byte-level leak scan** of outputs and database, idempotent re-run, corrupt files, foreign keys |
 | `tests/test_scripts.py` | 5 | Workshop Demo 1 (CSV) and Demo 2 (letters), reproducibility |
@@ -393,6 +394,17 @@ Design choices worth pointing out live:
 3. **Ship the regex version in a slide deck; ship Comprehend Medical in production.** A regex only catches what you thought to write a pattern for. The letters prove it: Faker produces military addresses (`PSC 5116, Box 3726, APO AP 44084`) that a street-number pattern missed until the rule was changed.
 
 ---
+
+## Study plan (protocol frozen)
+
+The experimental protocol for the evaluation of this pipeline (experiments E1
+to E7) is **frozen**: [docs/protocol.md](docs/protocol.md). It is merged
+before any experiment is run, so the merge timestamp shows the plan came before
+the results. Any later change is a new commit listed under "Deviations" in the
+protocol and reported in the paper. How results are recorded:
+[docs/results_schema.md](docs/results_schema.md). The MIDI-B dataset version
+and the scoring script commit are pinned in the protocol and in
+`experiments/midi_b.py`.
 
 ## Roadmap
 

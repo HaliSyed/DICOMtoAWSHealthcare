@@ -25,7 +25,8 @@ Written by each experiment script before any result:
 | `command` | The exact command line |
 | `profile` | `basic` or `utility` (or both, for E3/E7) |
 | `seed` | `20261125` for synthetic data, `null` otherwise |
-| `dataset` | Dataset name, version or DOI, split (`validation` / `test`), and the SHA-256 of the sorted list of input-file hashes |
+| `dataset` | Dataset name, version, DOI, **access date**, split (`validation` / `test`), and the SHA-256 of the sorted list of input-file hashes. For MIDI-B: version `1`, DOI `10.7937/cf2p-aw56`, access date `2026-07-02` |
+| `scorer` | E1 and E2(a) only: `repository` (`https://github.com/CBIIT/MIDI_validation_script`) and `commit` (the full 40-character hash used; must equal `ccc0939317d5ffd14edda33bc04641490d6f2254`). `null` for the other experiments |
 | `environment` | OS, CPU, RAM, Python version, and versions of pydicom, numpy, SQLAlchemy, psutil and any comparator tool |
 | `deviations` | References to entries in the protocol's Deviations section, or empty |
 
