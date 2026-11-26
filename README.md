@@ -100,8 +100,10 @@ Exact age is written as a DICOM Age String in its finest unit: days under
 study date. Ages of 90 and over are capped at `090Y`, as in the `90+` band of
 the basic profile. Both profiles produce identical
 tokens, UIDs and date shifts, so their outputs stay linkable. `utility` makes
-records easier to single out, so use it only where that risk has been assessed;
-the profile used is recorded in `DeidentificationMethod` and in the audit log.
+records easier to single out, so use it only where that risk has been assessed.
+Neither profile is designed to meet HIPAA Safe Harbor. Both keep shifted dates
+(Safe Harbor removes every date element except the year), and `utility` also
+keeps exact ages under 90. The profile used is recorded in `DeidentificationMethod` and in the audit log.
 
 ### Read any DICOM file
 
@@ -403,7 +405,7 @@ Design choices worth pointing out live:
 - [x] Extract study/series/instance metadata, plus the full header as DICOM JSON
 - [x] De-identify: PS3.15 Basic Profile subset, keyed tokens, UID remapping, per-patient week-based date shifts, age bands
 - [x] Independent residual-PHI verifier; quarantine for burned-in-text risk
-- [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
+- [x] Local relational DB (SQLite; tested on PostgreSQL 18 locally) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Demo 1 (CSV) and Demo 2 (letters) scripts, now reproducible
 - [x] 75 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
@@ -545,7 +547,7 @@ clearinghouse) or its business associate.
 |---|---|---|---|
 | PHI removed from schema; keyed tokens | Data minimisation | Art. 25, Art. 4(5) | Safe Harbor identifiers (token: see 164.514(c) note) |
 | Per-patient date shift | Pseudonymisation | Pseudonymisation | Expert Determination or Limited Data Set; year-only mode for Safe Harbor |
-| Age bands with `90+` (`basic` profile) | Minimisation | Minimisation | Safe Harbor age rule (`utility` caps age at `090Y`, but still keeps exact size and weight) |
+| Age bands with `90+` (`basic` profile) | Minimisation | Minimisation | Mirrors the Safe Harbor age rule for ages over 89; neither profile is designed to meet Safe Harbor overall (see the profiles note above) |
 | Independent verifier + quarantine | Accountability | Art. 5(2), Art. 32 | Security Rule, "no actual knowledge" |
 | Audit trail (`deid_audit_events`) | Accountability | Art. 30, Art. 5(2) | Audit controls |
 | Key held separately (`DEID_SECRET`) | Security | Art. 4(5) | 164.514(c) |

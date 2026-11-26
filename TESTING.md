@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-30 (updated 2026-11-26: utility age capped at 090Y; 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles, experiment cohort generator)
 **Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
-**Result:** ✅ **75 / 75 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **75 / 75 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL 18.0 was tested** on a local server (see [3.9](#39-postgresql-testspostgrespy)); the PostgreSQL test is skipped unless `DEID_TEST_POSTGRES_URL` is set, so the standard run shows 75 passed, 1 skipped.
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from public
 sources: the sample files that ship with pydicom, and the five Rubo Medical demo
@@ -44,7 +44,7 @@ Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirem
 | **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 75 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
 | **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
 | **psutil** | 7.2.2 | `experiments` | A cross-platform library for process and system information | Measures peak memory (resident set size) in experiment E6, the same way on Linux, macOS and Windows. Experiment-only: the pipeline itself does not import it. |
-| **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
+| **psycopg** 3 | 3.3.9 | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). Tested against a local PostgreSQL 18.0 server, see section 3.9. |
 
 ### 1.4 Build and install tooling
 
@@ -226,6 +226,16 @@ The synthetic cohort for experiments E3 and E7 (see `docs/protocol.md`), built b
 
 ---
 
+### 3.9 PostgreSQL: `tests/test_postgres.py`
+
+Run on 2026-11-26 against a throwaway local PostgreSQL 18.0 server (Windows, psycopg 3.3.9, `DEID_TEST_POSTGRES_URL=postgresql+psycopg://…`). Without that variable the test is skipped. The test drops and recreates the `public` schema, so it needs a disposable database.
+
+| # | Test | What it proves | Result |
+|---|---|---|---|
+| 76 | `test_postgres_matches_sqlite_and_reingest_is_idempotent` | The same synthetic files ingested into SQLite and PostgreSQL (utility profile) give identical database reports (patients, studies, series, instances, status and modality counts, audit events); no failures. The audit `actions` column is `jsonb`. Ingesting again adds no rows (all files are duplicates). | ✅ PASS (with a server) |
+
+Also checked once with a one-off script: the PostgreSQL tables (all text values of all five tables) contain none of the 166 PHI values collected from the raw files, 0 leaks; 3 foreign keys exist; 0 `FAILED` audit events.
+
 ## 4. Manual / end-to-end checks
 
 ### 4.1 README Quick Start, run exactly as written
@@ -372,7 +382,7 @@ git-ignored (`*.dcm` / `*.DCM`).
 
 | Area | Why | Plan |
 |---|---|---|
-| **PostgreSQL** | Docker is not installed on the test machine. The code uses only portable SQLAlchemy types (JSON → JSONB on Postgres), but this has **not** been run. | First task of Phase 1: run the suite with `DATABASE_URL=postgresql+psycopg://…` |
+| **PostgreSQL in CI, Alembic migrations, least-privilege roles, encryption at rest** | PostgreSQL 18.0 was tested locally (section 3.9), but not in GitHub Actions, and tables are still created with `create_all`. Only the new `test_postgres.py` ran against it; the other tests use SQLite. | Phase 1: add a PostgreSQL service to CI and run the whole suite against it |
 | **Amazon Comprehend Medical** call | Needs AWS credentials; synthetic-only policy | Phase 1, with a residency review first |
 | **Burned-in pixel text** | Phase 0 does not inspect pixels by design; risky images are quarantined instead | Phase 1 OCR + masking |
 | **Real clinical DICOM / HL7** | Out of scope for this public repo | Phase 1, controlled environment only |

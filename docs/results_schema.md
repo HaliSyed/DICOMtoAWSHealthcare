@@ -43,8 +43,8 @@ Written by each experiment script before any result:
 | E5 | `ratings.csv` | One row per attribute: `attribute`, `rater_1`, `rater_2`, `reason_1`, `reason_2` (independent ratings), `resolved` |
 | E5 | `agreement.json` | Cohen's kappa and linearly weighted kappa, each with a 95% bootstrap CI, and the confusion matrix |
 | E6 | `timing.csv` | One row per run (warm-up marked): `run`, `files`, `bytes`, `seconds`, `files_per_s`, `mb_per_s`, `peak_rss_mb` |
-| E7 | `age_error.csv` | Per profile and age group (child under 2, adult, over 90): `n`, `median_abs_error_years`, `p95_abs_error_years` |
-| E7 | `uniqueness.csv` | Per profile: `records`, `unique_k1`, `k_lt_5`, with 95% CIs, over age as kept, PatientSex, Modality and study year-month |
+| E7 | `age_error.csv` | Per profile and age group (child under 2, adult under 90, 90 and over): `n`, `median_abs_error_years`, `p95_abs_error_years` |
+| E7 | `uniqueness.csv` | Per profile, one record per study: `records`, `unique_k1`, `k_lt_5`, with 95% CIs, over age as kept, PatientSex, Modality and study year-month; plus `patients` and `patients_with_unique_study` |
 
 ## Figures
 
