@@ -1,8 +1,11 @@
 # Experimental protocol
 
-**Status:** fixed before any experiment is run. Committed to the public
-repository so the commit timestamp records the plan ahead of the results.
-Any later change is made in a new commit, listed under
+**Status: DRAFT, not yet frozen.** Open decisions are marked `[DECIDE]` and
+listed in [Open decisions](#open-decisions). Once every `[DECIDE]`,
+`[RECORD]`, `[TITLE]` and `[HOSPITAL]` marker is resolved, the draft is
+committed and pushed to the public repository as the frozen protocol, before
+any experiment is run, so the commit timestamp records the plan ahead of the
+results. From then on, any change is made in a new commit, listed under
 [Deviations](#deviations-from-this-protocol), and reported in the paper.
 
 **Software under test:** this repository. Every result file records the
@@ -165,11 +168,18 @@ analysis).
   the children under 2 and the patients over 90.
 - **Metrics.**
   - Age error: absolute difference between true age and the age the output
-    allows (band midpoint for *basic*), in years; median and 95th percentile.
+    allows, in years; median and 95th percentile, reported separately for
+    children under 2, adults and patients over 90. For *basic* the age
+    allowed is the band midpoint (`0-9` is 4.5 years, `10-19` is 14.5, and so
+    on). For the `90+` band the age allowed is **[DECIDE: 90 (the lower
+    bound) or 95]**. For *utility* the age allowed is the age as kept, so
+    the error is 0 below 90 and `true age - 90` at 90 and over, because of
+    the cap. Children under 2 are the group where the profiles differ most.
   - Uniqueness: share of records that are unique (k = 1) and share with
     k < 5, over four quasi-identifiers (age as kept by the profile,
     PatientSex, Modality, and study year-month after date shifting), under
-    each profile.
+    each profile. A record is **[DECIDE: one study, or one patient]**; the
+    choice is fixed here because it changes every k.
 - **No success threshold.**
 
 ### E8: AI-agent use of de-identified data
@@ -194,6 +204,17 @@ checksums and software versions it ran with (see
 [results_schema.md](results_schema.md)). Separate scripts rebuild every figure
 from the saved results alone. The README section "Reproducing the paper"
 gives the exact commands.
+
+## Open decisions
+
+Resolve each one, replace its marker in the text above, and then freeze.
+
+| # | Where | Decision | Answer |
+|---|---|---|---|
+| 1 | E7, age error | Age allowed by the `90+` band: 90 or 95 | [DECIDE] |
+| 2 | E7, uniqueness | Unit of a record: study or patient | [DECIDE] |
+| 3 | Section 2 | MIDI-B version, access date, licence, scoring script version | [RECORD] |
+| 4 | E5 | Titles and hospitals of the two raters | [TITLE], [HOSPITAL] |
 
 ## Deviations from this protocol
 
