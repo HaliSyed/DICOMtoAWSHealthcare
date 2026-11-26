@@ -60,7 +60,7 @@ data enters Path B's managed services.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 68 automated tests passing ([TESTING.md](TESTING.md)) |
+| **0** | Read DICOM (incl. compressed multi-frame) → extract → de-identify → verify → local DB | ✅ **Done**, 75 automated tests passing ([TESTING.md](TESTING.md)) |
 | **1** | Real DICOM images + HL7 v2 messages; PostgreSQL; production hardening | 🔜 Next |
 | **2** | FHIR R4 layer (ImagingStudy, Patient, DiagnosticReport…), with PDPL-aligned controls | 📐 Designed, see roadmap |
 | **3** | AWS pipeline: S3 → HealthImaging → inference → report generation (**Path B**) | 📐 Setup guide written: [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md); IaC next |
@@ -97,7 +97,8 @@ dicom-deid report    # 3. summarise what is in the database
 weight, for research where age matters (e.g. ageing and longevity studies).
 Exact age is written as a DICOM Age String in its finest unit: days under
 4 weeks, weeks under 26 weeks, months under 4 years, then years, computed at the
-study date. Ages over 89 are kept exact too. Both profiles produce identical
+study date. Ages of 90 and over are capped at `090Y`, as in the `90+` band of
+the basic profile. Both profiles produce identical
 tokens, UIDs and date shifts, so their outputs stay linkable. `utility` makes
 records easier to single out, so use it only where that risk has been assessed;
 the profile used is recorded in `DeidentificationMethod` and in the audit log.
@@ -144,7 +145,7 @@ To run it on your own (synthetic or public) DICOM folder, use
 ### Run the tests
 
 ```bash
-pytest            # 68 tests, about 15 seconds, fully offline
+pytest            # 75 tests, about 15 seconds, fully offline
 ```
 
 | Test file | Tests | What it covers |
@@ -152,7 +153,7 @@ pytest            # 68 tests, about 15 seconds, fully offline
 | `tests/test_pseudonym.py` | 4 | Keyed tokens, week-based date shifts, UID remapping, age bands |
 | `tests/test_dicom_deid.py` | 21 | Every de-identification rule, the independent verifier, burned-in risk, real vendor files from pydicom (one has 179 private tags), `PatientAge` in every DICOM unit |
 | `tests/test_cohort.py` | 4 | The experiment cohort generator meets the protocol spec, matches its ground truth and is reproducible from its seed |
-| `tests/test_profiles.py` | 14 | `basic` vs `utility` profile: exact age in its finest unit (newborns, infants, over 90), size and weight kept, linkage identical, no leaks |
+| `tests/test_profiles.py` | 21 | `basic` vs `utility` profile: exact age in its finest unit (newborns, infants), ages 90 and over capped at `090Y`, size and weight kept, linkage identical, no leaks |
 | `tests/test_pipeline.py` | 5 | End-to-end ingest, **byte-level leak scan** of outputs and database, idempotent re-run, corrupt files, foreign keys |
 | `tests/test_scripts.py` | 5 | Workshop Demo 1 (CSV) and Demo 2 (letters), reproducibility |
 | `tests/test_loader.py` | 13 | Reading DICOM: summaries without PHI values, JPEG/RLE/palette-colour decoding, multi-frame, PNG export, **every frame of the sample files** |
@@ -405,7 +406,7 @@ Design choices worth pointing out live:
 - [x] Local relational DB (SQLite; PostgreSQL-ready) with audit trail
 - [x] Synthetic "dirty" DICOM generator (private tags, nested names, national IDs, PHI in free text and folder names)
 - [x] Workshop Demo 1 (CSV) and Demo 2 (letters) scripts, now reproducible
-- [x] 68 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
+- [x] 75 automated tests, including a byte-level leak scan, real vendor files and compressed multi-frame decoding
 
 ### Phase 1: Real data: DICOM images + HL7 messages
 
@@ -544,7 +545,7 @@ clearinghouse) or its business associate.
 |---|---|---|---|
 | PHI removed from schema; keyed tokens | Data minimisation | Art. 25, Art. 4(5) | Safe Harbor identifiers (token: see 164.514(c) note) |
 | Per-patient date shift | Pseudonymisation | Pseudonymisation | Expert Determination or Limited Data Set; year-only mode for Safe Harbor |
-| Age bands with `90+` (`basic` profile) | Minimisation | Minimisation | Safe Harbor age rule (not met by `utility`) |
+| Age bands with `90+` (`basic` profile) | Minimisation | Minimisation | Safe Harbor age rule (`utility` caps age at `090Y`, but still keeps exact size and weight) |
 | Independent verifier + quarantine | Accountability | Art. 5(2), Art. 32 | Security Rule, "no actual knowledge" |
 | Audit trail (`deid_audit_events`) | Accountability | Art. 30, Art. 5(2) | Audit controls |
 | Key held separately (`DEID_SECRET`) | Security | Art. 4(5) | 164.514(c) |

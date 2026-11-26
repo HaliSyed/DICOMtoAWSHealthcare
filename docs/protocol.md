@@ -159,7 +159,8 @@ analysis).
 - **Profiles.**
   - *basic*: 10-year age band, ages 90 and over collapsed into `90+`.
   - *utility*: `PatientAge` kept in its finest DICOM unit (days, weeks, months
-    or years), computed at the study date; size and weight kept.
+    or years), computed at the study date, with ages of 90 and over capped
+    at `090Y`; size and weight kept.
 - **Method.** The synthetic cohort, whose true ages are known, including
   the children under 2 and the patients over 90.
 - **Metrics.**

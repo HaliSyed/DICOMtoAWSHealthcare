@@ -1,8 +1,8 @@
 # Testing Report: Phase 0
 
-**Date:** 2026-09-30 (updated 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles, experiment cohort generator)
+**Date:** 2026-09-30 (updated 2026-11-26: utility age capped at 090Y; 2026-11-25: PatientAge units fix, pinned dependencies, CI, `basic`/`utility` profiles, experiment cohort generator)
 **Scope:** **Path A** (the manual Python pipeline): DICOM read (including compressed multi-frame) → extract → de-identify → verify → local DB, plus the workshop scripts (Demo 1 CSV table, Demo 2 referral letters). **Path B** (AWS-managed, see [AWS-Managed-Healthcare](AWS-Managed-Healthcare/README.md)) has no tests yet; its infrastructure code comes next.
-**Result:** ✅ **68 / 68 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
+**Result:** ✅ **75 / 75 automated tests passed.** Manual end-to-end and leak-scan checks also passed. **PostgreSQL was not tested** (see [Not tested](#6-not-tested)).
 
 All data used in testing is synthetic (Faker, fixed seeds) or comes from public
 sources: the sample files that ship with pydicom, and the five Rubo Medical demo
@@ -41,7 +41,7 @@ Extras are declared under `optional-dependencies` in `pyproject.toml`. `requirem
 
 | Library | Version tested | Extra | What it is | Purpose in this project |
 |---|---|---|---|---|
-| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 68 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
+| **pytest** | 9.1.1 | `dev` | Python's most widely used test framework | Runs the 75 automated tests. It provides temporary folders (so tests never touch your real `data/`), shared fixtures (a synthetic DICOM set generated once per test run) and parametrised tests (one test run against 4 vendor files). |
 | **boto3** (+ botocore) | 1.43.105 | `aws` | The official AWS SDK for Python | Makes the Amazon Comprehend Medical `DetectPHI` call in `scripts/deidentify_with_comprehend_medical.py`. It is installed but **not exercised in testing**, since that needs AWS credentials. In Phase 1+ it will also be used for S3, AWS HealthImaging, Secrets Manager/KMS and Textract. |
 | **psutil** | 7.2.2 | `experiments` | A cross-platform library for process and system information | Measures peak memory (resident set size) in experiment E6, the same way on Linux, macOS and Windows. Experiment-only: the pipeline itself does not import it. |
 | **psycopg** 3 | *not installed* | `postgres` | The PostgreSQL driver for Python | Lets SQLAlchemy talk to PostgreSQL (`DATABASE_URL=postgresql+psycopg://…`). It is **not tested yet** because there was no PostgreSQL server or Docker on the test machine. This is the first task of Phase 1. |
@@ -132,7 +132,7 @@ and redistributable, and its source is recorded in section 4.4.
 ## 3. Automated tests (pytest)
 
 ```text
-68 passed, 1 warning
+75 passed, 1 warning
 ```
 
 The single warning is expected. pydicom complains about the deliberately truncated file used in `test_corrupt_file_is_recorded_and_run_continues`.
@@ -210,6 +210,8 @@ The single warning is expected. pydicom complains about the deliberately truncat
 | 62 | `test_utility_keeps_age_size_weight_and_nothing_else` | `basic` removes age, size and weight; `utility` keeps them. Token, date shift, age band, StudyDate, Study/Series/SOP UIDs and accession token are identical under both, so outputs stay linkable. The profile is named in `DeidentificationMethod` (≤ 64 chars) and the verifier reports no issues. | ✅ PASS |
 | 63 | `test_unknown_profile_is_refused` | An unknown profile name raises an error instead of silently falling back | ✅ PASS |
 | 64 | `test_utility_ingest_has_no_leaks_and_records_profile` | Full ingest with `--profile utility`: no failures, every audit event records the utility profile, the byte-level leak scan of files and database finds nothing, and every released file carries `PatientAge` | ✅ PASS |
+| 64a | `test_utility_age_is_capped_at_90[…]` (6 cases) | The utility profile never writes an age over 89: 91 years from dates and exactly 90 give `090Y`; one day short of 90 stays `089Y`; a recorded `096Y` gives `090Y`, a recorded `089Y` is kept; a malformed value is dropped | ✅ PASS |
+| 64b | `test_utility_output_never_holds_age_over_89` | End to end through `deidentify`: a 96-year-old's released `PatientAge` is `090Y` | ✅ PASS |
 
 ### 3.8 Experiment cohort: `tests/test_cohort.py`
 
