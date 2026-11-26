@@ -1,7 +1,7 @@
 # Experimental protocol
 
 **Status: DRAFT, not yet frozen.** The design decisions are made; what remains
-are facts to fill in, marked `[RECORD]`, `[TITLE]` and `[HOSPITAL, city]` and
+are facts to fill in, marked `[RECORD]` and `[TITLE]` and
 listed in [Open decisions](#open-decisions). Once every such marker is resolved, the draft is
 committed and pushed to the public repository as the frozen protocol, before
 any experiment is run, so the commit timestamp records the plan ahead of the
@@ -129,8 +129,8 @@ analysis).
 
 - **Question.** Which removed or changed details would clinicians need?
 - **Raters.** Dr. Syeda Sana Ali ([TITLE], Obstetrics and Gynaecology,
-  [HOSPITAL, city]) and Dr. Syeda Itrat Fatima ([TITLE], Paediatrics,
-  [HOSPITAL, city]).
+  Al-Kareem Hospital, Rawalpindi, Pakistan) and Dr. Syeda Itrat Fatima
+  ([TITLE], Paediatrics, Al-Kareem Hospital, Rawalpindi, Pakistan).
 - **Method.** The two raters, independently and without seeing each other's
   ratings, rate every attribute the pipeline removes or changes:
   *essential*, *useful* or *not needed*, with a one-line reason.
@@ -220,7 +220,8 @@ Resolve each one, replace its marker in the text above, and then freeze.
 | 1 | E7, age error | Age allowed by the `90+` band | Resolved: 90 (`090Y`); error is `true age - 90` |
 | 2 | E7, uniqueness | Unit of a record | Resolved: one study (primary); patients with a unique study (secondary) |
 | 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Open, from Raza: [RECORD] |
-| 4 | E5 | Titles, hospitals and cities of the two raters | Open: [TITLE], [HOSPITAL, city] |
+| 4 | E5 | Hospital of the two raters | Resolved: Al-Kareem Hospital, Rawalpindi, Pakistan (both) |
+| 5 | E5 | Titles of the two raters | Open: [TITLE] |
 
 ## Deviations from this protocol
 
