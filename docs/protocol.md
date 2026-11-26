@@ -38,8 +38,8 @@ Synthetic collections (public, with synthetic identifiers), the synthetic
 cohort and the seeded-identifier set. No file from Al-Kareem Hospital or from
 any other hospital, and no personal record, enters any experiment.
 
-- Al-Kareem Hospital, Rawalpindi appears only as the affiliation of the two
-  raters in E5.
+- Al-Kareem Hospital, Rawalpindi appears only in the raters' background in E5
+  (one rater formerly worked there; both support the hospital in good faith).
 - The only DICOM files in this repository are five public Rubo Medical demo
   samples in `tests/data/dicom/` (patient name "Rubo DEMO"). They are used by
   the test suite only, in no experiment.
@@ -145,8 +145,10 @@ analysis).
 
 - **Question.** Which removed or changed details would clinicians need?
 - **Raters.** Dr. Syeda Sana Ali (Specialist Obstetrician and Gynaecologist,
-  Al-Kareem Hospital, Rawalpindi, Pakistan) and Dr. Syeda Itrat Fatima
-  (Consultant Paediatrician, Al-Kareem Hospital, Rawalpindi, Pakistan).
+  Al Tadawi Specialty Hospital, UAE; formerly permanent staff at Al-Kareem
+  Hospital, Rawalpindi, Pakistan) and Dr. Syeda Itrat Fatima (Senior Clinical
+  Fellow, Paediatrics, Addenbrooke's Hospital, Cambridge, UK). Both support
+  Al-Kareem Hospital in good faith.
 - **Method.** The two raters, independently and without seeing each other's
   ratings, rate every attribute the pipeline removes or changes:
   *essential*, *useful* or *not needed*, with a one-line reason.
@@ -236,8 +238,8 @@ All resolved; the protocol is frozen.
 | 1 | E7, age error | Age allowed by the `90+` band | Resolved: 90 (`090Y`); error is `true age - 90` |
 | 2 | E7, uniqueness | Unit of a record | Resolved: one study (primary); patients with a unique study (secondary) |
 | 3 | Section 2 | MIDI-B licence check, collection version, access date, scoring script commit hash | Resolved: CC BY 4.0 (TCIA Data Usage Policy); version 1 (2025-05-02); access date in `data/midi/PROVENANCE.md`; scorer pinned at `ccc0939` |
-| 4 | E5 | Hospital of the two raters | Resolved: Al-Kareem Hospital, Rawalpindi, Pakistan (both) |
-| 5 | E5 | Titles of the two raters | Resolved: Specialist Obstetrician and Gynaecologist (Dr. Sana Ali); Consultant Paediatrician (Dr. Itrat Fatima) |
+| 4 | E5 | Hospital of the two raters | Resolved: Dr. Sana Ali, Al Tadawi Specialty Hospital, UAE (formerly Al-Kareem Hospital, Rawalpindi); Dr. Itrat Fatima, Addenbrooke's Hospital, Cambridge, UK; both support Al-Kareem Hospital in good faith |
+| 5 | E5 | Titles of the two raters | Resolved: Specialist Obstetrician and Gynaecologist (Dr. Sana Ali); Senior Clinical Fellow, Paediatrics (Dr. Itrat Fatima) |
 | 6 | Section 2.0 | Which experiments use the modified real-source files | Resolved: none; no real data is used |
 | 7 | Section 2.0 | Consent scope, ethics or institutional approval | Resolved: not applicable, no real data is used |
 | 8 | Section 2.0 | How the files were modified; counts per source | Resolved: not applicable |
